@@ -1,0 +1,211 @@
+'''
+Date: 2022-08-06 13:47:37
+LastEditors: yuhhong
+LastEditTime: 2022-11-21 16:05:50
+'''
+import os
+import argparse
+from tqdm import tqdm
+
+import pandas as pd
+
+from rdkit import Chem
+# suppress rdkit warning
+from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.*')
+from rdkit.Chem import AllChem
+from rdkit.Chem.Draw import rdDepictor
+
+if __name__ == "__main__":
+    # Training settings
+    parser = argparse.ArgumentParser(description='Molecular Conformers Generator')
+    parser.add_argument('--path', type=str, default="./data/CCS/allCCS_exp_all.csv", 
+                        help='Path to data')
+    parser.add_argument('--dataset', type=str, default = 'ccs', 
+                        choices=['qm9', 'ccs', 'rt', 'sol', 'chira', 'bbbp', 'tox21', 'toxcast', 'sider', 'clintox', 'muv', 'hiv'], 
+                        help='Dataset name')
+    parser.add_argument('--conf_type', type=str, default = 'ccs', 
+                        choices=['2d', 'etkdg', 'etkdgv3', 'omega'], 
+                        help='Dataset name')
+    parser.add_argument('--license', type=str, default="./license/oe_license.txt", 
+                        help='Path to openeye license')
+    args = parser.parse_args()
+
+
+
+    # 0. load openeye license: Generating OMEGA conformers needs a license. 
+    # If you don't have the license, you could choose not to use that conformers type. 
+    if args.conf_type == 'omega': 
+        import openeye
+        from openeye import oechem
+        from openeye import oeomega
+
+        # load openeye license
+        if os.path.isfile(args.license): 
+            license_file = open(args.license, 'r')
+            openeye.OEAddLicenseData(license_file.read())
+            license_file.close()
+        else:
+            print("Error: Your OpenEye license is not readable; please check your filename and that you have mounted your Google Drive")
+        licensed = oechem.OEChemIsLicensed()
+        print("Was your OpenEye license correctly installed (True/False)? " + str(licensed))
+        if not licensed: 
+            print("Error: Your OpenEye license is not correctly installed.")
+            raise Exception("Error: Your OpenEye license is not correctly installed.")
+
+
+
+    # 1. extract SMILES list from datasets
+    smiles_list = []
+    prop_dict = {}
+    id_list = []
+    adduct_list = []
+    if args.dataset == 'ccs': 
+        df = pd.read_csv(args.path)
+        smiles_list = df['SMILES'].tolist()
+        # prop_list = df['CCS'].tolist()
+        prop_dict['ccs'] = df['CCS'].tolist()
+        id_list = df['ID'].tolist()
+        adduct_list = df['AdductEncode'].tolist()
+
+    elif args.dataset == 'rt': 
+        supp = Chem.SDMolSupplier(args.path)
+        prop_dict['rt'] = []
+        for idx, mol in enumerate(supp):
+            smiles_list.append(Chem.MolToSmiles(mol))
+            # prop_list.append(mol.GetProp("RETENTION_TIME"))
+            prop_dict['rt'].append(mol.GetProp("RETENTION_TIME"))
+            id_list.append('smrt_'+str(idx).zfill(6))
+            adduct_list.append(str(0))
+
+    elif args.dataset == 'sol':
+        df = pd.read_csv(args.path)
+        smiles_list = df['SMILES'].tolist()
+        # prop_list = df['Solubility'].tolist()
+        prop_dict['sol'] = df['Solubility'].tolist()
+        id_list = df['ID'].tolist()
+        adduct_list = [str(0)]*len(df)
+
+    elif args.dataset == 'chira': 
+        supp = Chem.SDMolSupplier(args.path)
+        prop_dict['k2/k1'] = []
+        for idx, mol in enumerate(supp):
+            smiles_list.append(Chem.MolToSmiles(mol))
+            prop_dict['k2/k1'].append(mol.GetProp('k2/k1'))
+            id_list.append('chira_'+str(idx).zfill(6))
+            adduct_list.append(mol.GetProp('encode_mobile_phase')) 
+            
+    elif args.dataset == 'bbbp':
+        df = pd.read_csv(args.path)
+        smiles_list = df['smiles'].tolist()
+        # prop_list = df['p_np'].tolist()
+        prop_dict['bbbp'] = df['p_np'].tolist()
+        id_list = df['name'].tolist()
+        adduct_list = [str(0)]*len(df)
+
+    elif args.dataset == 'hiv':
+        df = pd.read_csv(args.path)
+        smiles_list = df['smiles'].tolist()
+        prop_dict['hiv'] = df['HIV_active'].tolist()
+        id_list = df.index.values.tolist()
+        adduct_list = [str(0)]*len(df)
+
+    elif args.dataset == 'tox21' or args.dataset == 'muv':
+        df = pd.read_csv(args.path)
+        smiles_list = df['smiles'].tolist()
+        prop_list = df.columns.values.tolist()
+        prop_list.remove('smiles')
+        prop_list.remove('scaffold')
+        prop_list.remove('mol_id')
+        for task in prop_list:
+            prop_dict[task] = df[task].tolist()
+        id_list = df['mol_id'].tolist()
+        adduct_list = [str(0)]*len(df)
+
+    elif args.dataset == 'toxcast' or args.dataset == 'sider' or args.dataset == 'clintox': # pick all targets
+        df = pd.read_csv(args.path)
+        smiles_list = df['smiles'].tolist()
+        prop_list = df.columns.values.tolist()
+        prop_list.remove('smiles')
+        prop_list.remove('scaffold')
+        for task in prop_list:
+            prop_dict[task] = df[task].tolist()
+        id_list = df.index.values.tolist()
+        adduct_list = [str(0)]*len(df)
+
+    else:
+        raise Exception("Unsupported dataset: {}".format(args.dataset))
+
+
+
+    # 2. generate conformers of 2D, ETKDG, ETKDGv3 and OMEGA
+    out_supp = []
+    for idx, smiles in enumerate(tqdm(smiles_list)): 
+        if args.conf_type == 'etkdg': 
+            mol = Chem.MolFromSmiles(smiles)
+            if mol == None: continue
+            mol_from_smiles = Chem.AddHs(mol)
+            AllChem.EmbedMolecule(mol_from_smiles)
+
+        elif args.conf_type == 'etkdgv3': 
+            mol = Chem.MolFromSmiles(smiles)
+            if mol == None: continue
+            mol_from_smiles = Chem.AddHs(mol)
+            AllChem.EmbedMolecule(mol_from_smiles, AllChem.ETKDGv3()) 
+
+        elif args.conf_type == '2d':
+            mol = Chem.MolFromSmiles(smiles)
+            if mol == None: continue
+            mol_from_smiles = Chem.AddHs(mol)
+            rdDepictor.Compute2DCoords(mol_from_smiles)
+
+        elif args.conf_type == 'omega':
+            # print("Is GPU ready? (True/False)", oeomega.OEOmegaIsGPUReady())
+            mol_from_smiles = oechem.OEMol()
+            oechem.OEParseSmiles(mol_from_smiles, smiles)
+            oechem.OESuppressHydrogens(mol_from_smiles)
+            
+            # First we set up Omega
+            omega = oeomega.OEOmega() 
+            omega.SetMaxConfs(1) # Only generate one conformer for our molecule
+            omega.SetStrictStereo(False) # Set to False to pick random stereoisomer if stereochemistry is not specified (not relevant here)
+            omega.SetStrictAtomTypes(False) # Be a little loose about atom typing to ensure parameters are available to omega for all molecules
+            omega(mol_from_smiles)
+            
+        else: 
+            raise ValueError("Undifined conformer type: {}".format(args.conf_type))
+
+        # append id, conformer, property, adduct
+        # rdkit
+        if args.conf_type == 'etkdg' or args.conf_type == 'etkdgv3' or args.conf_type == '2d': 
+            mol_from_smiles.SetProp('id', str(id_list[idx]))
+            mol_from_smiles.SetProp('smiles', str(smiles_list[idx]))
+            mol_from_smiles.SetProp('adduct', str(adduct_list[idx]))
+            for task in prop_dict.keys():
+                mol_from_smiles.SetProp(task, str(prop_dict[task][idx]))
+            out_supp.append(mol_from_smiles)
+        # oechem
+        else: 
+            oechem.OESetSDData(mol_from_smiles, 'id', str(id_list[idx]))
+            oechem.OESetSDData(mol_from_smiles, 'smiles', str(smiles_list[idx]))
+            oechem.OESetSDData(mol_from_smiles, 'adduct', str(adduct_list[idx]))
+            for task in prop_dict.keys(): 
+                oechem.OESetSDData(mol_from_smiles, task, str(prop_dict[task][idx]))
+            out_supp.append(mol_from_smiles)
+
+
+
+    # 3. save the resutls
+    output_path = '.'.join(args.path.split('.')[:-1])+'_'+args.conf_type+'.sdf'
+    if args.conf_type == 'omega':
+        ofs = oechem.oemolostream()
+        ofs.SetFormat(oechem.OEFormat_SDF)
+        ofs.open(output_path)
+        for mol in out_supp: 
+            oechem.OEWriteConstMolecule(ofs, mol)
+    
+    else:
+        ofs = Chem.SDWriter(output_path)
+        for mol in out_supp: 
+            ofs.write(mol)
+    print("Save the generate conformers in {}".format(output_path))

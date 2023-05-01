@@ -1,12 +1,8 @@
-# 3DMolChar
-
-
-
-## Single charility phase
-
-### 1. Preprocess
-
-```bash
+###
+ # @Date: 2022-11-29 13:40:45
+ # @LastEditors: yuhhong
+ # @LastEditTime: 2022-11-29 13:41:20
+### 
 python ./preprocess/preprocess_chirality.py --input ./data/Chirality/chirbase.sdf --output ./data/Chirality/chirbase_clean.sdf
 
 python ./preprocess/gen_conformers.py --path ./data/Chirality/chirbase_clean.sdf --dataset chira --conf_type etkdg # slow
@@ -19,27 +15,3 @@ python ./preprocess/random_split_sdf.py --input ./data/Chirality/chirbase_clean_
 # Load 78598/35898 data from ./data/Chirality/chirbase_clean_etkdg.sdf
 # Get 32488 training data, 3589 test data
 # python ./preprocess/random_split_sdf.py --input ./data/Chirality/chirbase_clean_omega.sdf --output_train ./data/Chirality/chirbase_clean_omega_train.sdf --output_test ./data/Chirality/chirbase_clean_omega_test.sdf
-```
-
-### 2. Train & Eval
-
-```bash
-
-```
-
-
-
-## Multi-charility phase (multi-task learning)
-
-### 1. Preprocess
-
-```bash
-
-```
-
-### 2. Train & Eval
-
-```bash
-
-```
-
