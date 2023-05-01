@@ -130,33 +130,12 @@ class ChiralityDataset(BaseDataset):
 		self.num_points = num_points
 		self.data_augmentation = data_augmentation
 
-		CSP_NO_LIST = ['91027',
-						'4297',
-						'91119',
-						'90704',
-						'91423',
-						'2',
-						'90357',
-						'91518',
-						'3575',
-						'15723',
-						'90211',
-						'394',
-						'44869',
-						'45172',
-						'90589',
-						'90879',
-						'45167',
-						'90246',
-						'23735',
-						'45173'] # the largest 20 phases
-		assert csp_no >= 0 and csp_no < len(CSP_NO_LIST)
-		csp = CSP_NO_LIST[csp_no]
+		assert csp_no >= 0 and csp_no < 20
 
 		self.supp = [] # without balance
 		for mol in supp: 
-			mb = mol.GetProp('csp_no')
-			if mb != csp: 
+			mb = int(mol.GetProp('adduct'))
+			if mb != csp_no: 
 				continue
 			self.supp.append(mol)
 	
@@ -174,10 +153,13 @@ class ChiralityDataset(BaseDataset):
 				stat[y] = [i]
 		print('Before balance: {}'.format({k: len(v) for k, v in stat.items()}))
 
-		# gcd = self.least_common_multiple([len(v) for v in stat.values()])
-		gcd = 14000
+		lengths = [len(v) for v in stat.values()]
+		gcd = self.least_common_multiple(lengths)
+		if gcd // max(lengths) > 5: 
+			gcd = max(lengths) * 5
 		coef = {k: gcd//len(v) for k, v in stat.items()}
 		# print(gcd, coef)
+		# exit()
 		balance_indices = []
 		balance_stat = {}
 		for i, mol in enumerate(train_supp): 
@@ -210,11 +192,11 @@ class ChiralityDataset(BaseDataset):
 		# id = mol.GetProp('id')
 		# name = mol.GetProp('_Name')
 		smiles = Chem.MolToSmiles(mol)
-		if mol.HasProp('adduct'):
-			adduct = int(mol.GetProp('adduct')) # only one adduct
-		else:
-			adduct = int(mol.GetProp('encode_mobile_phase')) # only one adduct
-		return smiles, X, mask, Y, adduct
+		# if mol.HasProp('adduct'):
+		# 	adduct = int(mol.GetProp('adduct')) # only one adduct
+		# else:
+		# 	adduct = int(mol.GetProp('encode_mobile_phase')) # only one adduct
+		return smiles, X, mask, Y
 
 	def convert2cls(self, chir): 
 		# if chir < 1: # no data fallen in this class

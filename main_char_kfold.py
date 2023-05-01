@@ -45,18 +45,17 @@ def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, 
     y_true = []
     y_pred = []
     for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
-        _, x, mask, y, env = batch
+        _, x, mask, y = batch
         x = x.to(device).to(torch.float32)
         x = x.permute(0, 2, 1)
         mask = mask.to(device).to(torch.float32)
         y = y.to(device)
         y = F.one_hot(y, num_classes=out_cls).to(torch.float32)
-        env = env.to(device).to(torch.float32)
 
         idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
         model.train()
-        pred = model(x, env, idx_base)
+        pred = model(x, None, idx_base)
         pred = F.softmax(pred, dim=0)
           
         loss = cls_criterion(pred, y)
@@ -74,7 +73,7 @@ def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, 
         y_true.append(y.detach().cpu())
         y_pred.append(pred.detach().cpu())
     
-    y_true = torch.cat(y_true, dim = 0) # torch.Size([856, 2000])
+    y_true = torch.cat(y_true, dim = 0) 
     y_pred = torch.cat(y_pred, dim = 0)
     return y_true, y_pred
 
@@ -84,25 +83,24 @@ def eval(model, device, loader, batch_size, num_points, out_cls):
     y_pred = []
     names = []
     for _, batch in enumerate(tqdm(loader, desc="Iteration")):
-        name, x, mask, y, env = batch
+        name, x, mask, y = batch
         x = x.to(device).to(torch.float32)
         x = x.permute(0, 2, 1)
         mask = mask.to(device).to(torch.float32)
         y = y.to(device)
         y = F.one_hot(y, num_classes=out_cls).to(torch.float32)
-        env = env.to(device).to(torch.float32)
 
         idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
         with torch.no_grad(): 
-            pred = model(x, env, idx_base)
+            pred = model(x, None, idx_base)
             pred = F.softmax(pred, dim=0)
 
         y_true.append(y.detach().cpu())
         y_pred.append(pred.detach().cpu())
         names.extend(name)
-        
-    y_true = torch.cat(y_true, dim = 0) # torch.Size([856, 2000])
+
+    y_true = torch.cat(y_true, dim = 0) 
     y_pred = torch.cat(y_pred, dim = 0)
     return names, y_true, y_pred
 
@@ -226,7 +224,6 @@ if __name__ == "__main__":
                                                     fold_i,
                                                     num_workers=config['train_para']['num_workers'], 
                                                     batch_size=config['train_para']['batch_size'],)
-        
         optimizer = optim.Adam(model.parameters(), 
                                 lr=config['train_para']['lr'], 
                                 weight_decay=config['train_para']['weight_decay'])
@@ -261,6 +258,8 @@ if __name__ == "__main__":
         if args.log_dir != '':
             writer = SummaryWriter(log_dir=args.log_dir)
 
+        early_stop_step = 10
+        early_stop_patience = 0
         for epoch in range(1, config['train_para']['epochs'] + 1): 
             print("\n=====Epoch {}".format(epoch))
 
@@ -274,8 +273,11 @@ if __name__ == "__main__":
             
             print('Evaluating...')
             names, y_true, y_pred = eval(model, device, valid_loader, config['train_para']['batch_size'], config['model_para']['num_atoms'], config['model_para']['out_channels'])
-            valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovo',)
-
+            try: 
+                valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovo',)
+            except:
+                valid_auc = np.nan
+                
             y_true = torch.argmax(y_true, dim=1)
             y_pred = torch.argmax(y_pred, dim=1)
             valid_acc = accuracy_score(y_true, y_pred)
@@ -295,11 +297,19 @@ if __name__ == "__main__":
                     print('Saving checkpoint...')
                     checkpoint = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(), 'best_val_auc': best_valid_auc, 'num_params': num_params}
                     torch.save(checkpoint, args.checkpoint)
-            
+                early_stop_patience = 0
+                print('Early stop patience reset')
+            else:
+                early_stop_patience += 1
+                print('Early stop count: {}/{}'.format(early_stop_patience, early_stop_step))
+
             scheduler.step()
-            
             print('Best ACC so far: {}'.format(best_valid_acc))
             print('Best AUC so far: {}'.format(best_valid_auc))
+
+            if early_stop_patience == early_stop_step:
+                print('Early stop!')
+                break
 
         if args.log_dir != '':
             writer.close()

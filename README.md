@@ -24,7 +24,7 @@ python ./preprocess/random_split_sdf.py --input ./data/Chirality/chirbase_clean_
 ### 2. Train & Eval
 
 ```bash
-
+nohup bash ./experiments/molnet_char_etkdg.sh > molnet_char_etkdg.out 
 ```
 
 

@@ -45,19 +45,17 @@ def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, 
     y_true = []
     y_pred = []
     for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
-        _, x, mask, y, env = batch
+        _, x, mask, y = batch
         x = x.to(device).to(torch.float32)
         x = x.permute(0, 2, 1)
         mask = mask.to(device).to(torch.float32)
         y = y.to(device)
         y = F.one_hot(y, num_classes=out_cls).to(torch.float32)
-        env = env.to(device).to(torch.float32)
-        # env = F.normalize(env)
 
         idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
         model.train()
-        pred = model(x, env, idx_base)
+        pred = model(x, None, idx_base)
         pred = F.softmax(pred, dim=0)
           
         loss = cls_criterion(pred, y)
@@ -85,19 +83,17 @@ def eval(model, device, loader, batch_size, num_points, out_cls):
     y_pred = []
     names = []
     for _, batch in enumerate(tqdm(loader, desc="Iteration")):
-        name, x, mask, y, env = batch
+        name, x, mask, y = batch
         x = x.to(device).to(torch.float32)
         x = x.permute(0, 2, 1)
         mask = mask.to(device).to(torch.float32)
         y = y.to(device)
         y = F.one_hot(y, num_classes=out_cls).to(torch.float32)
-        env = env.to(device).to(torch.float32)
-        # env = F.normalize(env)
 
         idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
         with torch.no_grad(): 
-            pred = model(x, env, idx_base)
+            pred = model(x, None, idx_base)
             pred = F.softmax(pred, dim=0)
 
         y_true.append(y.detach().cpu())
@@ -225,6 +221,8 @@ if __name__ == "__main__":
     if args.log_dir != '':
         writer = SummaryWriter(log_dir=args.log_dir)
 
+    early_stop_step = 10
+    early_stop_patience = 0
     for epoch in range(1, config['train_para']['epochs'] + 1): 
         print("\n=====Epoch {}".format(epoch))
 
@@ -265,11 +263,19 @@ if __name__ == "__main__":
                 print('Saving checkpoint...')
                 checkpoint = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(), 'best_val_auc': best_valid_auc, 'num_params': num_params}
                 torch.save(checkpoint, args.checkpoint)
-        
+            early_stop_patience = 0
+            print('Early stop patience reset')
+        else:
+            early_stop_patience += 1
+            print('Early stop count: {}/{}'.format(early_stop_patience, early_stop_step))
+
         scheduler.step()
-        
         print('Best ACC so far: {}'.format(best_valid_acc))
         print('Best AUC so far: {}'.format(best_valid_auc))
+
+        if early_stop_patience == early_stop_step:
+            print('Early stop!')
+            break
 
     if args.log_dir != '':
         writer.close()

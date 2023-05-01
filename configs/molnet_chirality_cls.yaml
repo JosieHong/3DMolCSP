@@ -9,7 +9,7 @@ paths:
 model_para: 
   in_channels: 21
   num_atoms: 300
-  num_add: 1
+  num_add: 0
   encoder_layers: [64, 64, 128, 256]
   emb_dim: 512
   k: 5
@@ -18,7 +18,7 @@ model_para:
   out_channels: 3
 
 train_para:
-  batch_size: 256
+  batch_size: 64
   accum_iter: 1
   epochs: 100
   lr: 0.001
