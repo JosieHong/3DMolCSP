@@ -4,7 +4,7 @@
  # @LastEditTime: 2022-11-29 13:43:51
 ### 
 
-for VARIABLE in 0 1 2 3 4 5 .. 20
+for VARIABLE in {0..19}
 do
     echo "python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg.yaml --csp_no $VARIABLE \
 --log_dir ./logs/molnet_chirality/ \
@@ -17,5 +17,6 @@ do
     echo "Done!"
 done
 
-
-
+# python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg.yaml --csp_no 1 \
+#                                 --log_dir ./logs/molnet_chirality/ \
+#                                 --checkpoint ./check_point/tmp.pt

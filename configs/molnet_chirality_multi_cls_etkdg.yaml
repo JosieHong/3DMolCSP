@@ -2,9 +2,9 @@ model: 'molnet'
 dataset: 'chirality'
 
 paths: 
-  train_data: './data/Chirality/chirbase_clean_omega_train.sdf'
-  valid_data: './data/Chirality/chirbase_clean_omega_test.sdf'
-  all_data: './data/Chirality/chirbase_clean_omega.sdf' # for k-fold
+  train_data: './data/Chirality/chirbase_clean_etkdg_train.sdf'
+  valid_data: './data/Chirality/chirbase_clean_etkdg_test.sdf'
+  all_data: './data/Chirality/chirbase_clean_etkdg.sdf' # for k-fold
 
 model_para: 
   in_channels: 21
@@ -13,13 +13,13 @@ model_para:
   encoder_layers: [64, 64, 128, 256]
   emb_dim: 512
   k: 5
-  decoder_layers: [512, 256, 128, 64]
+  decoder_layers: [512, 64]
   dropout: 0.3
-  csp_num: 1
+  csp_num: 20
   out_channels: 3
 
 train_para:
-  batch_size: 64
+  batch_size: 128
   accum_iter: 1
   epochs: 100
   lr: 0.001

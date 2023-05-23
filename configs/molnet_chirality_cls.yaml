@@ -15,6 +15,7 @@ model_para:
   k: 5
   decoder_layers: [512, 256, 128, 64]
   dropout: 0.3
+  csp_num: 1
   out_channels: 3
 
 train_para:

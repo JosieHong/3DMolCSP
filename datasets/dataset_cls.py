@@ -124,56 +124,79 @@ class BaseDataset(Dataset):
 		return mol
 
 # Chirality
-class ChiralityDataset(BaseDataset):
-	def __init__(self, supp, num_points=200, csp_no=0, data_augmentation=False):
+class ChiralityDataset(BaseDataset): 
+	def __init__(self, supp, num_points=200, multi_csp=False, csp_no=0, data_augmentation=False): 
 		super(ChiralityDataset, self).__init__()
 		self.num_points = num_points
+		self.multi_csp = multi_csp
 		self.data_augmentation = data_augmentation
 
-		assert csp_no >= 0 and csp_no < 20
+		if multi_csp: # multiple csp_no 
+			assert csp_no == 0, "Charility phase number can not be chosen, if multi_scp==True. "
+			self.supp = supp
 
-		self.supp = [] # without balance
-		for mol in supp: 
-			mb = int(mol.GetProp('adduct'))
-			if mb != csp_no: 
-				continue
-			self.supp.append(mol)
+		else: # single csp_no 
+			assert csp_no >= 0 and csp_no < 20
+			self.supp = [] # without balance
+			for mol in supp: 
+				mb = int(mol.GetProp('adduct'))
+				if mb != csp_no: 
+					continue
+				self.supp.append(mol)
 	
 	def balance_indices(self, indices): 
 		print('Balance the dataset...')
 		train_supp = [mol for i, mol in enumerate(self.supp) if i in indices]
 
-		stat = {}
+		# seperate by csp
+		csp_dict = {}
 		for i, mol in enumerate(train_supp): 
+			mb = int(mol.GetProp('adduct'))
 			chir = float(mol.GetProp('k2/k1'))
 			y = self.convert2cls(chir)
-			if y in stat.keys():
-				stat[y].append(i)
-			else:
-				stat[y] = [i]
-		print('Before balance: {}'.format({k: len(v) for k, v in stat.items()}))
 
-		lengths = [len(v) for v in stat.values()]
-		gcd = self.least_common_multiple(lengths)
-		if gcd // max(lengths) > 5: 
-			gcd = max(lengths) * 5
-		coef = {k: gcd//len(v) for k, v in stat.items()}
-		# print(gcd, coef)
-		# exit()
-		balance_indices = []
-		balance_stat = {}
-		for i, mol in enumerate(train_supp): 
-			chir = float(mol.GetProp('k2/k1'))
-			y = self.convert2cls(chir)
-			balance_indices += [i]*coef[y]
-
-			if y in balance_stat.keys():
-				balance_stat[y] += coef[y]
+			if mb in csp_dict.keys(): 
+				if y in csp_dict[mb].keys():
+					csp_dict[mb][y].append(i)
+				else:
+					csp_dict[mb][y] = [i]
 			else:
-				balance_stat[y] = coef[y]
-		print('After balance: {}'.format(balance_stat))
-		# exit()
-		return balance_indices
+				csp_dict[mb] = {y: [i]}
+		
+		# stat = {}
+		# for i, mol in enumerate(train_supp): 
+		# 	chir = float(mol.GetProp('k2/k1'))
+		# 	y = self.convert2cls(chir)
+		# 	if y in stat.keys():
+		# 		stat[y].append(i)
+		# 	else:
+		# 		stat[y] = [i]
+		# print('Before balance: {}'.format({k: len(v) for k, v in stat.items()}))
+
+		output_indices = []
+		for csp, stat in csp_dict.items(): 
+			print('Before balance ({}): {}'.format(csp, {k: len(v) for k, v in stat.items()}))
+
+			lengths = [len(v) for v in stat.values()]
+			gcd = self.least_common_multiple(lengths)
+			if gcd // max(lengths) > 3: 
+				gcd = max(lengths) * 3
+			coef = {k: gcd//len(v) for k, v in stat.items()}
+			print(coef)
+			balance_indices = []
+			balance_stat = {}
+			for i, mol in enumerate(train_supp): 
+				chir = float(mol.GetProp('k2/k1'))
+				y = self.convert2cls(chir)
+				balance_indices += [i]*coef[y]
+
+				if y in balance_stat.keys():
+					balance_stat[y] += coef[y]
+				else:
+					balance_stat[y] = coef[y]
+			print('After balance ({}): {}'.format(csp, balance_stat))
+			output_indices += balance_indices
+		return output_indices
 
 	def least_common_multiple(self, num):
 		minimum = 1
@@ -186,17 +209,17 @@ class ChiralityDataset(BaseDataset):
 
 	def __getitem__(self, idx):
 		mol = self.supp[idx]
+		smiles = Chem.MolToSmiles(mol)
 		X, mask = self.create_X(mol, self.num_points)
 		chir = float(mol.GetProp('k2/k1'))
 		Y = self.convert2cls(chir)
-		# id = mol.GetProp('id')
-		# name = mol.GetProp('_Name')
-		smiles = Chem.MolToSmiles(mol)
-		# if mol.HasProp('adduct'):
-		# 	adduct = int(mol.GetProp('adduct')) # only one adduct
-		# else:
-		# 	adduct = int(mol.GetProp('encode_mobile_phase')) # only one adduct
-		return smiles, X, mask, Y
+		if self.multi_csp:
+			mb = int(mol.GetProp('adduct'))
+			multi_Y = [np.nan] * 20
+			multi_Y[mb] = Y
+			return smiles, X, mask, torch.Tensor(multi_Y).to(torch.int64)
+		else: 
+			return smiles, X, mask, Y
 
 	def convert2cls(self, chir): 
 		# if chir < 1: # no data fallen in this class
