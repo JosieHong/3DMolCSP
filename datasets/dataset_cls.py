@@ -153,7 +153,7 @@ class ChiralityDataset(BaseDataset):
 		for i, mol in enumerate(train_supp): 
 			mb = int(mol.GetProp('adduct'))
 			chir = float(mol.GetProp('k2/k1'))
-			y = self.convert2cls(chir)
+			y = self.convert2cls(chir, mol.GetProp('csp_category'))
 
 			if mb in csp_dict.keys(): 
 				if y in csp_dict[mb].keys():
@@ -166,7 +166,7 @@ class ChiralityDataset(BaseDataset):
 		# stat = {}
 		# for i, mol in enumerate(train_supp): 
 		# 	chir = float(mol.GetProp('k2/k1'))
-		# 	y = self.convert2cls(chir)
+		# 	y = self.convert2cls(chir, mol.GetProp('csp_category'))
 		# 	if y in stat.keys():
 		# 		stat[y].append(i)
 		# 	else:
@@ -187,7 +187,7 @@ class ChiralityDataset(BaseDataset):
 			balance_stat = {}
 			for i, mol in enumerate(train_supp): 
 				chir = float(mol.GetProp('k2/k1'))
-				y = self.convert2cls(chir)
+				y = self.convert2cls(chir, mol.GetProp('csp_category'))
 				balance_indices += [i]*coef[y]
 
 				if y in balance_stat.keys():
@@ -212,7 +212,7 @@ class ChiralityDataset(BaseDataset):
 		smiles = Chem.MolToSmiles(mol)
 		X, mask = self.create_X(mol, self.num_points)
 		chir = float(mol.GetProp('k2/k1'))
-		Y = self.convert2cls(chir)
+		Y = self.convert2cls(chir, mol.GetProp('csp_category'))
 		if self.multi_csp:
 			mb = int(mol.GetProp('adduct'))
 			multi_Y = [np.nan] * 20
@@ -221,19 +221,32 @@ class ChiralityDataset(BaseDataset):
 		else: 
 			return smiles, X, mask, Y
 
-	def convert2cls(self, chir): 
-		# if chir < 1: # no data fallen in this class
-		#     y = 0
-		# elif chir < 1.15:
-		#     y = 1
-		# elif chir < 1.2:
-		#     y = 2
-		# else:
-		#     y = 3
-		if chir < 1.15:
-			y = 0
-		elif chir < 1.2:
-			y = 1
+	def convert2cls(self, chir, csp_category): 
+		if csp_category == '1': 
+			# For polysaccharide CSPs:
+			if chir < 1.15:
+				y = 0
+			elif chir < 1.2:
+				y = 1
+			elif chir < 2.1:
+				y = 2
+			else:
+				y = 3
 		else:
-			y = 2
+			# For Pirkle CSPs:
+			if chir < 1.05: 
+			    y = 0
+			elif chir < 1.15:
+			    y = 1
+			elif chir < 2: 
+			    y = 2
+			else:
+			    y = 3
+
+		# if chir < 1.15:
+		# 	y = 0
+		# elif chir < 2:
+		# 	y = 1
+		# else:
+		# 	y = 2
 		return y

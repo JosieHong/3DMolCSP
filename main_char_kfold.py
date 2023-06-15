@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import MultiStepLR
 import random
+from sklearn.preprocessing import OneHotEncoder
 
 from rdkit import Chem
 # suppress rdkit warning
@@ -32,11 +33,20 @@ from models.schnet import SchNet
 
 
 
+def cal_roc_auc_score(y_true, y_pred, multi_class='ovo'):
+	y_true = y_true.reshape(-1, 1)
+	enc = OneHotEncoder(categories=[[i for i in range(y_pred.shape[1])]])
+	y_true = enc.fit_transform(y_true).toarray()
+	# print('y_true', y_true.shape, 'y_pred', y_pred.shape)
+	score = roc_auc_score(y_true, y_pred, multi_class=multi_class)
+	return score
+
 def cls_criterion(outputs, targets):
 	targets = torch.squeeze(targets)
 	
 	# print('outputs', outputs.size(), 'targets', targets.size())
-	loss = nn.CrossEntropyLoss(reduction="mean")(outputs, targets)
+	# print(outputs[0, :], targets[0])
+	loss = nn.CrossEntropyLoss()(outputs, targets)
 	return loss
 
 def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, out_cls):
@@ -86,7 +96,6 @@ def eval(model, device, loader, batch_size, num_points, out_cls):
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
 		y = y.to(device)
-		y = F.one_hot(y, num_classes=out_cls).to(torch.float32)
 
 		idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
@@ -148,6 +157,8 @@ if __name__ == "__main__":
 						help='predict 20 charility phase together')
 	parser.add_argument('--csp_no', type=int, default=0,
 						help='charility phase number [0, 19]')
+	parser.add_argument('--k_fold', type=int, default=10,
+						help='k for k-fold validation')
 	parser.add_argument('--log_dir', type=str, default="./logs/molnet_bbbp/", 
 						help='tensorboard log directory')
 	parser.add_argument('--checkpoint', type=str, default = '', 
@@ -207,18 +218,17 @@ if __name__ == "__main__":
 								csp_no=args.csp_no, 
 								data_augmentation=False)
 	print('Load {} data from {}.'.format(len(dataset), config['paths']['all_data']))
-	# split the indices into K_FOLD
-	K_FOLD = 10
-	each_chunk = len(dataset) // K_FOLD
+	# split the indices into k-fold
+	each_chunk = len(dataset) // args.k_fold
 	indices = list(range(len(dataset)))
 	random.shuffle(indices)
 	print('dataset size: {} \nchunk size: {}'.format(len(indices), each_chunk))
 	split_indices = []
-	for i in range(K_FOLD): 
+	for i in range(args.k_fold): 
 		split_indices.append(indices[i*each_chunk: (i+1)*each_chunk])
 
 	records = {'best_acc': [], 'best_auc': []}
-	for fold_i in range(K_FOLD): 
+	for fold_i in range(args.k_fold): 
 		print('\n# --------------- Fold-{} --------------- #'.format(fold_i)) 
 		train_loader, valid_loader = load_data_fold(dataset, 
 													split_indices, 
@@ -271,20 +281,22 @@ if __name__ == "__main__":
 
 			print('Training...')
 			y_true, y_pred = train(model, device, train_loader, optimizer, config['train_para']['accum_iter'], config['train_para']['batch_size'], config['model_para']['num_atoms'], config['model_para']['out_channels'])
-			train_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovo',)
+			# train_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovo',)
+			train_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovo',)
 			
-			y_true = torch.argmax(y_true, dim=1)
+			# y_true = torch.argmax(y_true, dim=1)
 			y_pred = torch.argmax(y_pred, dim=1)
 			train_acc = accuracy_score(y_true, y_pred)
 			
 			print('Evaluating...')
 			names, y_true, y_pred = eval(model, device, valid_loader, config['train_para']['batch_size'], config['model_para']['num_atoms'], config['model_para']['out_channels'])
 			try: 
-				valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovo',)
-			except:
+				# valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovo',)
+				valid_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovo',)
+			except: 
 				valid_auc = np.nan
-				
-			y_true = torch.argmax(y_true, dim=1)
+			
+			# y_true = torch.argmax(y_true, dim=1)
 			y_pred = torch.argmax(y_pred, dim=1)
 			valid_acc = accuracy_score(y_true, y_pred)
 			

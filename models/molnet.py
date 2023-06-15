@@ -185,7 +185,8 @@ class MolNet(nn.Module):
 										layers=args['decoder_layers'], 
 										out_dim=args['out_channels'], 
 										dropout=args['dropout'])
-		
+		self.activation = nn.Softmax(dim=1)
+
 	def forward(self, x: torch.Tensor, 
 						env: torch.Tensor, 
 						idx_base: torch.Tensor) -> torch.Tensor: 
@@ -205,6 +206,6 @@ class MolNet(nn.Module):
 		# decoder
 		out = []
 		for i in range(self.csp_num): 
-			out.append(self.decoder(x))
+			out.append(self.activation(self.decoder(x)))
 		out = torch.stack(out, 1)
 		return torch.squeeze(out)
