@@ -125,18 +125,17 @@ class BaseDataset(Dataset):
 
 # Chirality
 class ChiralityDataset(BaseDataset): 
-	def __init__(self, supp, num_points=200, multi_csp=False, csp_no=0, data_augmentation=False): 
+	def __init__(self, supp, num_points=200, num_csp=16, csp_no=0, data_augmentation=False): 
 		super(ChiralityDataset, self).__init__()
 		self.num_points = num_points
-		self.multi_csp = multi_csp
+		self.num_csp = num_csp
 		self.data_augmentation = data_augmentation
 
-		if multi_csp: # multiple csp_no 
+		if num_csp > 1: # multiple csp_no 
 			assert csp_no == 0, "Charility phase number can not be chosen, if multi_scp==True. "
 			self.supp = supp
 
 		else: # single csp_no 
-			assert csp_no >= 0 and csp_no < 20
 			self.supp = [] # without balance
 			for mol in supp: 
 				mb = int(mol.GetProp('adduct'))
@@ -176,21 +175,27 @@ class ChiralityDataset(BaseDataset):
 		output_indices = []
 		for csp, stat in csp_dict.items(): 
 			print('Before balance ({}): {}'.format(csp, {k: len(v) for k, v in stat.items()}))
-
+			if len(stat) < 3:
+				print('Only {} class, drop this csp.'.format(len(stat)))
+				continue
+				
 			lengths = [len(v) for v in stat.values()]
 			gcd = self.least_common_multiple(lengths)
 			if gcd // max(lengths) > 3: 
 				gcd = max(lengths) * 3
 			coef = {k: gcd//len(v) for k, v in stat.items()}
-			print(coef)
+			# print(coef)
 			balance_indices = []
 			balance_stat = {}
 			for i, mol in enumerate(train_supp): 
+				mb = int(mol.GetProp('adduct'))
+				if mb != csp: 
+					continue
 				chir = float(mol.GetProp('k2/k1'))
 				y = self.convert2cls(chir, mol.GetProp('csp_category'))
 				balance_indices += [i]*coef[y]
 
-				if y in balance_stat.keys():
+				if y in balance_stat.keys(): 
 					balance_stat[y] += coef[y]
 				else:
 					balance_stat[y] = coef[y]
@@ -213,13 +218,13 @@ class ChiralityDataset(BaseDataset):
 		X, mask = self.create_X(mol, self.num_points)
 		chir = float(mol.GetProp('k2/k1'))
 		Y = self.convert2cls(chir, mol.GetProp('csp_category'))
-		if self.multi_csp:
-			mb = int(mol.GetProp('adduct'))
-			multi_Y = [np.nan] * 20
+		mb = int(mol.GetProp('adduct'))
+		if self.num_csp > 1: 
+			multi_Y = [np.nan] * self.num_csp
 			multi_Y[mb] = Y
-			return smiles, X, mask, torch.Tensor(multi_Y).to(torch.int64)
+			return smiles, mb, X, mask, torch.Tensor(multi_Y)
 		else: 
-			return smiles, X, mask, Y
+			return smiles, mb, X, mask, Y
 
 	def convert2cls(self, chir, csp_category): 
 		if csp_category == '1': 
@@ -232,7 +237,7 @@ class ChiralityDataset(BaseDataset):
 				y = 2
 			else:
 				y = 3
-		else:
+		elif csp_category == '2': 
 			# For Pirkle CSPs:
 			if chir < 1.05: 
 			    y = 0
@@ -242,7 +247,8 @@ class ChiralityDataset(BaseDataset):
 			    y = 2
 			else:
 			    y = 3
-
+		else:
+			raise Exception("The category for CSP should be 1 or 2, rather than {}.".format(csp_category))
 		# if chir < 1.15:
 		# 	y = 0
 		# elif chir < 2:

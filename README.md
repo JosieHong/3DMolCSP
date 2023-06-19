@@ -21,15 +21,16 @@ python ./preprocess/random_split_sdf.py --input ./data/Chirality/chirbase_clean_
 ### 2. Train & Eval
 
 ```bash
+# test
+python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg_eval.yaml --k_fold 5 --csp_no 0 \
+                                --log_dir ./logs/molnet_chirality/ \
+                                --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp0.pt \
+                                --result_path ./results/molnet_chirality_cls_etkdg_csp0.csv
+
 nohup bash ./experiments/molnet_char_etkdg_10fold.sh > molnet_char_etkdg_10fold.out 
 
 nohup bash ./experiments/molnet_char_etkdg_5fold.sh > molnet_char_etkdg_5fold.out 
-
-# multiple charility phases
-nohup python main_char_kfold.py --config ./configs/molnet_chirality_multi_cls_etkdg.yaml --multi_csp True --k_fold 5 \
-                            --log_dir ./logs/molnet_chirality/ \
-                            --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp_multi.pt \
-                            --device 1 > molnet_chirality_cls_etkdg_csp_multi.out 
+nohup bash ./experiments/molnet_char_etkdg_5fold.sh > molnet_char_etkdg_5fold_ovr.out 
 ```
 
 ```bash
@@ -37,17 +38,13 @@ nohup python main_char_kfold.py --config ./configs/molnet_chirality_multi_cls_et
 grep -m 10 '^15723' chirbase.sdf -B 20 
 ```
 
-## Multi-charility phase (multi-task learning)
-
-### 1. Preprocess
+### 3. Train & Eval (multi-task learning)
 
 ```bash
-
-```
-
-### 2. Train & Eval
-
-```bash
-
+nohup python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg_multi.yaml --k_fold 5 \
+                            --log_dir ./logs/molnet_chirality/ \
+                            --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp_multi.pt \
+                            --result_path ./results/molnet_chirality_cls_etkdg_csp_multi.csv \
+                            --device 2 > molnet_char_etkdg_5fold_multi.out 
 ```
 

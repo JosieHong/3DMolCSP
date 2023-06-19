@@ -6,6 +6,7 @@ LastEditTime: 2022-12-12 12:57:28
 import os
 import argparse
 import numpy as np
+import pandas as pd 
 from tqdm import tqdm
 import yaml
 
@@ -33,27 +34,28 @@ from models.schnet import SchNet
 
 
 
-def cal_roc_auc_score(y_true, y_pred, multi_class='ovo'):
+def cal_roc_auc_score(y_true, y_pred, multi_class='ovr'): 
 	y_true = y_true.reshape(-1, 1)
 	enc = OneHotEncoder(categories=[[i for i in range(y_pred.shape[1])]])
 	y_true = enc.fit_transform(y_true).toarray()
 	# print('y_true', y_true.shape, 'y_pred', y_pred.shape)
 	score = roc_auc_score(y_true, y_pred, multi_class=multi_class)
-	return score
+	return score1
 
-def cls_criterion(outputs, targets):
+def cls_criterion(outputs, targets): 
+	# print('outputs', outputs.size(), 'targets', targets.size())
 	targets = torch.squeeze(targets)
 	
 	# print('outputs', outputs.size(), 'targets', targets.size())
 	# print(outputs[0, :], targets[0])
-	loss = nn.CrossEntropyLoss()(outputs, targets)
+	loss = nn.CrossEntropyLoss()(outputs, targets.to(torch.int64))
 	return loss
 
-def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, out_cls):
+def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, out_cls, csp_num):
 	y_true = []
 	y_pred = []
 	for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
-		_, x, mask, y = batch
+		_, _, x, mask, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
@@ -62,11 +64,14 @@ def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, 
 
 		model.train()
 		pred = model(x, None, idx_base)
-		pred = F.softmax(pred, dim=0)
-		
+		# print('pred', pred.size())
+
 		invalid_y = torch.isnan(y)
-		# print('invalid_y', invalid_y.size(), 'pred', pred.size())
-		loss = cls_criterion(pred[~invalid_y], y[~invalid_y])
+		if csp_num > 1: 
+			invalid_pred = invalid_y.unsqueeze(2).repeat(1, 1, out_cls)
+		else:
+			invalid_pred = invalid_y
+		loss = cls_criterion(pred[~invalid_pred].view(y.size(0), -1), y[~invalid_y])
 		# normalize loss to account for batch accumulation
 		loss = loss / accum_iter 
 		loss.backward()
@@ -78,20 +83,21 @@ def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, 
 			optimizer.step()
 			optimizer.zero_grad()
 
-		y_true.append(y.detach().cpu())
-		y_pred.append(pred.detach().cpu())
-	
-	y_true = torch.cat(y_true, dim = 0) 
-	y_pred = torch.cat(y_pred, dim = 0)
+		y_true.append(y[~invalid_y].detach().cpu())
+		y_pred.append(pred[~invalid_pred].view(y.size(0), -1).detach().cpu())
+
+	y_true = torch.cat(y_true, dim=0)
+	y_pred = torch.cat(y_pred, dim=0)
 	return y_true, y_pred
 
-def eval(model, device, loader, batch_size, num_points, out_cls): 
+def eval(model, device, loader, batch_size, num_points, out_cls, csp_num): 
 	model.eval()
 	y_true = []
 	y_pred = []
 	names = []
+	mbs = []
 	for _, batch in enumerate(tqdm(loader, desc="Iteration")):
-		name, x, mask, y = batch
+		name, mb, x, mask, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
@@ -101,15 +107,20 @@ def eval(model, device, loader, batch_size, num_points, out_cls):
 
 		with torch.no_grad(): 
 			pred = model(x, None, idx_base)
-			pred = F.softmax(pred, dim=0)
 
-		y_true.append(y.detach().cpu())
-		y_pred.append(pred.detach().cpu())
+		invalid_y = torch.isnan(y)
+		if csp_num > 1: 
+			invalid_pred = invalid_y.unsqueeze(2).repeat(1, 1, out_cls)
+		else:
+			invalid_pred = invalid_y
+		y_true.append(y[~invalid_y].detach().cpu())
+		y_pred.append(pred[~invalid_pred].view(y.size(0), -1).detach().cpu())
 		names.extend(name)
+		mbs.extend(mb.tolist())
 
-	y_true = torch.cat(y_true, dim = 0) 
-	y_pred = torch.cat(y_pred, dim = 0)
-	return names, y_true, y_pred
+	y_true = torch.cat(y_true, dim=0) 
+	y_pred = torch.cat(y_pred, dim=0)
+	return names, mbs, y_true, y_pred
 
 def batch_filter(supp): 
 	for mol in supp: # remove empty molecule
@@ -153,25 +164,25 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Molecular Properties Prediction')
 	parser.add_argument('--config', type=str, default = './configs/molnet_bbbp.yaml',
 						help='Path to configuration')
-	parser.add_argument('--multi_csp', type=bool, default=False,
-						help='predict 20 charility phase together')
 	parser.add_argument('--csp_no', type=int, default=0,
-						help='charility phase number [0, 19]')
+						help='Charility phase number [0, 19]')
 	parser.add_argument('--k_fold', type=int, default=10,
 						help='k for k-fold validation')
 	parser.add_argument('--log_dir', type=str, default="./logs/molnet_bbbp/", 
-						help='tensorboard log directory')
+						help='Tensorboard log directory')
 	parser.add_argument('--checkpoint', type=str, default = '', 
-						help='path to save checkpoint')
+						help='Path to save checkpoint')
 	parser.add_argument('--resume_path', type=str, default='', 
 						help='Pretrained model path')
+	parser.add_argument('--result_path', type=str, default='', 
+						help='Results path')
 	parser.add_argument('--transfer', action='store_true', 
 						help='Whether to load the pretrained encoder')
 
 	parser.add_argument('--device', type=int, default=0,
-						help='which gpu to use if any (default: 0)')
+						help='Which gpu to use if any (default: 0)')
 	parser.add_argument('--no_cuda', type=bool, default=False,
-						help='enables CUDA training')
+						help='Enables CUDA training')
 
 	args = parser.parse_args()
 	args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -214,7 +225,7 @@ if __name__ == "__main__":
 	supp = Chem.SDMolSupplier(config['paths']['all_data'])
 	dataset = ChiralityDataset([item for item in batch_filter(supp)], 
 								num_points=config['model_para']['num_atoms'], 
-								multi_csp=args.multi_csp, 
+								num_csp=config['model_para']['csp_num'], 
 								csp_no=args.csp_no, 
 								data_augmentation=False)
 	print('Load {} data from {}.'.format(len(dataset), config['paths']['all_data']))
@@ -249,10 +260,25 @@ if __name__ == "__main__":
 			check_point_fold = args.checkpoint.replace('.pt', '_{}.pt'.format(fold_i))
 			print('Modify the path to checkpoint as: {}'.format(check_point_fold))
 
+			checkpoint_dir = "/".join(args.checkpoint.split('/')[:-1])
+			os.makedirs(checkpoint_dir, exist_ok = True)
+			print('Create {}'.format(checkpoint_dir))
+
+		if args.resume_path != '':
+			resume_path_fold = args.resume_path.replace('.pt', '_{}.pt'.format(fold_i))
+			print('Modify the path to resume_path as: {}'.format(resume_path_fold))
+		if args.result_path != '':
+			result_path_fold = args.result_path.replace('.csv', '_{}.csv'.format(fold_i))
+			print('Modify the path to result_path as: {}'.format(result_path_fold))
+
+			result_dir = "/".join(args.result_path.split('/')[:-1])
+			os.makedirs(result_dir, exist_ok = True)
+			print('Create {}'.format(result_dir))
+
 		if args.resume_path != '': 
 			if args.transfer: 
 				print("Load the pretrained encoder...")
-				state_dict = torch.load(args.resume_path)['model_state_dict']
+				state_dict = torch.load(resume_path_fold)['model_state_dict']
 				encoder_dict = {}
 				for name, param in state_dict.items():
 					if name.startswith("encoder"): 
@@ -260,16 +286,12 @@ if __name__ == "__main__":
 				model.load_state_dict(encoder_dict, strict=False) 
 			else:
 				print("Load the checkpoints...")
-				model.load_state_dict(torch.load(args.resume_path)['model_state_dict'])
-				optimizer.load_state_dict(torch.load(args.resume_path)['optimizer_state_dict'])
-				scheduler.load_state_dict(torch.load(args.resume_path)['scheduler_state_dict'])
-				best_valid_auc = torch.load(args.resume_path)['best_val_auc']
+				model.load_state_dict(torch.load(resume_path_fold)['model_state_dict'])
+				optimizer.load_state_dict(torch.load(resume_path_fold)['optimizer_state_dict'])
+				scheduler.load_state_dict(torch.load(resume_path_fold)['scheduler_state_dict'])
+				best_valid_auc = torch.load(resume_path_fold)['best_val_auc']
 
 		model.to(device) 
-
-		if args.checkpoint != '':
-			checkpoint_dir = "/".join(args.checkpoint.split('/')[:-1])
-			os.makedirs(checkpoint_dir, exist_ok = True)
 
 		if args.log_dir != '':
 			writer = SummaryWriter(log_dir=args.log_dir)
@@ -280,23 +302,29 @@ if __name__ == "__main__":
 			print("\n=====Epoch {}".format(epoch))
 
 			print('Training...')
-			y_true, y_pred = train(model, device, train_loader, optimizer, config['train_para']['accum_iter'], config['train_para']['batch_size'], config['model_para']['num_atoms'], config['model_para']['out_channels'])
-			# train_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovo',)
-			train_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovo',)
-			
-			# y_true = torch.argmax(y_true, dim=1)
+			y_true, y_pred = train(model, device, train_loader, optimizer, 
+									config['train_para']['accum_iter'], 
+									config['train_para']['batch_size'], 
+									config['model_para']['num_atoms'], 
+									config['model_para']['out_channels'], 
+									config['model_para']['csp_num'])
+			train_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
+			# train_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovr',)
 			y_pred = torch.argmax(y_pred, dim=1)
 			train_acc = accuracy_score(y_true, y_pred)
-			
+
 			print('Evaluating...')
-			names, y_true, y_pred = eval(model, device, valid_loader, config['train_para']['batch_size'], config['model_para']['num_atoms'], config['model_para']['out_channels'])
+			names, mbs, y_true, y_pred = eval(model, device, valid_loader, 
+												config['train_para']['batch_size'], 
+												config['model_para']['num_atoms'], 
+												config['model_para']['out_channels'],
+												config['model_para']['csp_num'])
 			try: 
-				# valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovo',)
-				valid_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovo',)
+				valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
+				# valid_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovr',)
 			except: 
 				valid_auc = np.nan
 			
-			# y_true = torch.argmax(y_true, dim=1)
 			y_pred = torch.argmax(y_pred, dim=1)
 			valid_acc = accuracy_score(y_true, y_pred)
 			
@@ -334,6 +362,28 @@ if __name__ == "__main__":
 
 		records['best_acc'].append(best_valid_acc)
 		records['best_auc'].append(best_valid_auc)
+
+		# output the best validation results
+		if args.result_path:
+			
+
+			print("Load the best results...")
+			model.load_state_dict(torch.load(check_point_fold)['model_state_dict'])
+			optimizer.load_state_dict(torch.load(check_point_fold)['optimizer_state_dict'])
+			scheduler.load_state_dict(torch.load(check_point_fold)['scheduler_state_dict'])
+			best_valid_auc = torch.load(check_point_fold)['best_val_auc']
+
+			print('Evaluating...')
+			names, mbs, y_true, y_pred = eval(model, device, valid_loader, 
+												config['train_para']['batch_size'], 
+												config['model_para']['num_atoms'], 
+												config['model_para']['out_channels'],
+												config['model_para']['csp_num'])
+			y_pred = torch.argmax(y_pred, dim=1)
+
+			res_df = pd.DataFrame({'SMILES': names, 'MB': mbs, 'Class': y_true, 'Pred': y_pred})
+			res_df.to_csv(result_path_fold, sep='\t')
+			print('Save the test results to {}'.format(result_path_fold))
 
 	print('\n# --------------- Final Results --------------- #')
 	for i, (acc, auc) in enumerate(zip(records['best_acc'], records['best_auc'])):

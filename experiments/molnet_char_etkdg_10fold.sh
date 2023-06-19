@@ -4,7 +4,7 @@
  # @LastEditTime: 2022-11-29 13:43:51
 ### 
 
-for VARIABLE in {0..19}
+for VARIABLE in {0..15}
 do
     echo "python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg.yaml --k_fold 10 --csp_no $VARIABLE \
 --log_dir ./logs/molnet_chirality/ \
@@ -16,15 +16,3 @@ do
 
     echo "Done!"
 done
-
-python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg.yaml --k_fold 10 --csp_no 0 \
-                                --log_dir ./logs/molnet_chirality/ \
-                                --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp0.pt
-
-python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg.yaml --k_fold 10 --csp_no 2 \
-                                --log_dir ./logs/molnet_chirality/ \
-                                --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp2.pt
-
-python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg.yaml --k_fold 10 --csp_no 3 \
-                                --log_dir ./logs/molnet_chirality/ \
-                                --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp3.pt
