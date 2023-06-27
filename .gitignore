@@ -160,3 +160,5 @@ cython_debug/
 #.idea/
 
 data/Chirality/
+results/
+data/batch_drop_img/

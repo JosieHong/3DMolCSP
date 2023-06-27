@@ -160,6 +160,9 @@ class Encoder(nn.Module):
 		p1 = F.adaptive_max_pool1d(x, 1).squeeze()
 		p2 = F.adaptive_avg_pool1d(x, 1).squeeze()
 		
+		if x.size(0) == 1: # batch size is 1
+			p1 = p1.view(1, -1)
+			p2 = p2.view(1, -1)
 		x = torch.cat((p1, p2), 1)
 		x = self.merge(x)
 		return x
@@ -196,6 +199,7 @@ class MolNet(nn.Module):
 			env:    experimental condiction
 			idx_base:   idx for local knn
 		'''
+		batch_size = x.size(0)
 		x = self.encoder(x, idx_base) # torch.Size([batch_size, emb_dim])
 		
 		if self.num_add == 1:
@@ -208,4 +212,7 @@ class MolNet(nn.Module):
 		for i in range(self.csp_num): 
 			out.append(self.activation(self.decoder(x)))
 		out = torch.stack(out, 1)
-		return torch.squeeze(out)
+		if batch_size == 1: 
+			return torch.squeeze(out).view(1, -1)
+		else: 
+			return torch.squeeze(out)

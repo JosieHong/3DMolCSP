@@ -103,7 +103,7 @@ def eval(model, device, loader, batch_size, num_points, out_cls, csp_num):
 		mask = mask.to(device).to(torch.float32)
 		y = y.to(device)
 
-		idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
+		idx_base = torch.arange(0, 2, device=device).view(-1, 1, 1) * num_points
 
 		with torch.no_grad(): 
 			pred = model(x, None, idx_base)
@@ -151,7 +151,7 @@ def load_data_fold(dataset, split_indices, fold_i, num_workers, batch_size):
 								drop_last=True,
 								sampler=train_sampler)
 	valid_loader = DataLoader(dataset,
-								batch_size=batch_size,
+								batch_size=2, 
 								num_workers=num_workers,
 								drop_last=True,
 								sampler=valid_sampler)
@@ -278,7 +278,7 @@ if __name__ == "__main__":
 		if args.resume_path != '': 
 			if args.transfer: 
 				print("Load the pretrained encoder...")
-				state_dict = torch.load(resume_path_fold)['model_state_dict']
+				state_dict = torch.load(args.resume_path, map_location=device)['model_state_dict']
 				encoder_dict = {}
 				for name, param in state_dict.items():
 					if name.startswith("encoder"): 
@@ -334,9 +334,10 @@ if __name__ == "__main__":
 				writer.add_scalar('valid/auc', valid_auc, epoch)
 				writer.add_scalar('train/auc', train_auc, epoch)
 
-			# if valid_auc > best_valid_auc: 
-			#     best_valid_auc = valid_auc
-			if valid_acc > best_valid_acc: 
+			if (not np.isnan(valid_auc) and valid_auc > best_valid_auc) or \
+				(np.isnan(valid_auc) and valid_acc >= best_valid_acc): 
+			# if valid_acc > best_valid_acc: 
+			# if valid_acc >= best_valid_acc and valid_auc >= best_valid_auc: 
 				best_valid_acc = valid_acc
 				best_valid_auc = valid_auc
 				if args.checkpoint != '':
@@ -364,9 +365,7 @@ if __name__ == "__main__":
 		records['best_auc'].append(best_valid_auc)
 
 		# output the best validation results
-		if args.result_path:
-			
-
+		if args.result_path: 
 			print("Load the best results...")
 			model.load_state_dict(torch.load(check_point_fold)['model_state_dict'])
 			optimizer.load_state_dict(torch.load(check_point_fold)['optimizer_state_dict'])
@@ -379,9 +378,12 @@ if __name__ == "__main__":
 												config['model_para']['num_atoms'], 
 												config['model_para']['out_channels'],
 												config['model_para']['csp_num'])
-			y_pred = torch.argmax(y_pred, dim=1)
+			# y_pred = torch.argmax(y_pred, dim=1) # we need to output the probabilities
+			y_pred_out = []
+			for y in y_pred:
+				y_pred_out.append(','.join([str(i) for i in y.tolist()]))
 
-			res_df = pd.DataFrame({'SMILES': names, 'MB': mbs, 'Class': y_true, 'Pred': y_pred})
+			res_df = pd.DataFrame({'SMILES': names, 'MB': mbs, 'Class': y_true, 'Pred': y_pred_out})
 			res_df.to_csv(result_path_fold, sep='\t')
 			print('Save the test results to {}'.format(result_path_fold))
 

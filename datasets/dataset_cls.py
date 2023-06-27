@@ -162,15 +162,40 @@ class ChiralityDataset(BaseDataset):
 			else:
 				csp_dict[mb] = {y: [i]}
 		
-		# stat = {}
+		# # compute the coefficient
+		# csp_coef = {}
+		# csp_len = []
+		# for stat in csp_dict.values():
+		# 	csp_len.append(max([len(index) for index in stat.values()]))
+		# csp_max = max(csp_len)
+		# for csp, stat in csp_dict.items(): 
+		# 	print('Before balance ({}): {}'.format(csp, {k: len(v) for k, v in stat.items()}))
+		# 	if len(stat) < 3:
+		# 		print('Only {} class, drop this csp.'.format(len(stat))) # invalid csp
+		# 		continue
+				
+		# 	lengths = [len(v) for v in stat.values()]
+		# 	gcd = self.least_common_multiple(lengths)
+		# 	if gcd // max(lengths) > 3: 
+		# 		gcd = max(lengths) * 3
+		# 	coef4all = csp_max // max(lengths)
+		# 	coef = {k: int(gcd//len(v)*coef4all) for k, v in stat.items()}
+		# 	csp_coef.update({csp: coef})
+
+		# 	balance_stat = {k: int(len(v)*c) for (k, v), c in zip(stat.items(), coef.values())}
+		# 	print('After balance ({}): {}'.format(csp, balance_stat))
+		# print(csp_coef)
+
+		# # output the indices
+		# output_indices = []
 		# for i, mol in enumerate(train_supp): 
+		# 	mb = int(mol.GetProp('adduct'))
 		# 	chir = float(mol.GetProp('k2/k1'))
 		# 	y = self.convert2cls(chir, mol.GetProp('csp_category'))
-		# 	if y in stat.keys():
-		# 		stat[y].append(i)
-		# 	else:
-		# 		stat[y] = [i]
-		# print('Before balance: {}'.format({k: len(v) for k, v in stat.items()}))
+		# 	if mb in csp_coef.keys(): # exclude the invalud csp 
+		# 		c = csp_coef[mb][y]
+		# 		output_indices += [i] * c
+		# exit()
 
 		output_indices = []
 		for csp, stat in csp_dict.items(): 
