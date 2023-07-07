@@ -123,7 +123,8 @@ class BaseDataset(Dataset):
 				rdDepictor.Compute2DCoords(mol)
 		return mol
 
-# Chirality
+
+
 class ChiralityDataset(BaseDataset): 
 	def __init__(self, supp, num_points=200, num_csp=16, csp_no=0, data_augmentation=False): 
 		super(ChiralityDataset, self).__init__()
@@ -237,7 +238,7 @@ class ChiralityDataset(BaseDataset):
 	def __len__(self):
 		return len(self.supp)
 
-	def __getitem__(self, idx):
+	def __getitem__(self, idx): 
 		mol = self.supp[idx]
 		smiles = Chem.MolToSmiles(mol)
 		X, mask = self.create_X(mol, self.num_points)
@@ -274,10 +275,25 @@ class ChiralityDataset(BaseDataset):
 			    y = 3
 		else:
 			raise Exception("The category for CSP should be 1 or 2, rather than {}.".format(csp_category))
-		# if chir < 1.15:
-		# 	y = 0
-		# elif chir < 2:
-		# 	y = 1
-		# else:
-		# 	y = 2
 		return y
+
+
+
+# inference dataset
+class ChiralityDataset_infer(BaseDataset): 
+	def __init__(self, supp, num_points=200, csp_no=0, data_augmentation=False): 
+		super(ChiralityDataset_infer, self).__init__()
+		self.supp = supp
+		self.num_points = num_points
+		self.csp_no = csp_no
+		self.data_augmentation = data_augmentation
+
+	def __len__(self):
+		return len(self.supp)
+
+	def __getitem__(self, idx): 
+		mol = self.supp[idx]
+		smiles = Chem.MolToSmiles(mol)
+		X, mask = self.create_X(mol, self.num_points)
+		mb = int(self.csp_no)
+		return smiles, mb, X, mask

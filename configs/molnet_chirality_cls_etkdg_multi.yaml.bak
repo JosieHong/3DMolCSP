@@ -5,18 +5,17 @@ paths:
   train_data: './data/Chirality/chirbase_clean_etkdg_train.sdf'
   valid_data: './data/Chirality/chirbase_clean_etkdg_test.sdf'
   all_data: './data/Chirality/chirbase_clean_etkdg.sdf' # for k-fold
-  test_data: './data/Chirality/chirbase_all_mol_etkdg.sdf' # for infer
 
 model_para: 
   in_channels: 21
-  num_atoms: 100
+  num_atoms: 300
   num_add: 0
-  encoder_layers: [64, 64, 128, 256, 512, 1024]
-  emb_dim: 2048
+  encoder_layers: [64, 64, 128, 256]
+  emb_dim: 512
   k: 5
   decoder_layers: [512, 256, 128, 64]
   dropout: 0.3
-  csp_num: 1
+  csp_num: 18
   out_channels: 4
 
 train_para:

@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Molecular Conformers Generator')
     parser.add_argument('--path', type=str, default="./data/CCS/allCCS_exp_all.csv", 
                         help='Path to data')
-    parser.add_argument('--conf_type', type=str, default = 'ccs', 
+    parser.add_argument('--conf_type', type=str, default = 'etkdg', 
                         choices=['2d', 'etkdg', 'etkdgv3', 'omega'], 
                         help='Dataset name')
     parser.add_argument('--license', type=str, default="./license/oe_license.txt", 
