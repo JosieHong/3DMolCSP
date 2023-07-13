@@ -7,18 +7,18 @@
 for VARIABLE in {0..17}
 do
     
-    echo "python main_char.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --csp_no $VARIABLE \
+    echo "python main_chir.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --csp_no $VARIABLE \
                                 --log_dir ./logs/molnet_chirality/ \
                                 --resume_path ./check_point/molnet_agilent.pt \
                                 --transfer \
-                                --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                --checkpoint ./check_point_all/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
                                 --device 2"
 
-    python main_char.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --csp_no $VARIABLE \
+    python main_chir.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --csp_no $VARIABLE \
                                 --log_dir ./logs/molnet_chirality/ \
                                 --resume_path ./check_point/molnet_agilent.pt \
                                 --transfer \
-                                --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                --checkpoint ./check_point_all/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
                                 --device 2
 
     echo "Done!"

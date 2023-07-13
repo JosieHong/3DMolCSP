@@ -10,18 +10,18 @@ start=$(date +%s)
 for VARIABLE in {0..8}
 do
     
-    echo "python main_char.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --csp_no $VARIABLE \
+    echo "python main_chir.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --csp_no $VARIABLE \
                                 --log_dir ./logs/molnet_chirality/ \
                                 --resume_path ./check_point/molnet_agilent.pt \
                                 --transfer \
-                                --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                --checkpoint ./check_point_all/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
                                 --device 0"
 
-    python main_char.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --csp_no $VARIABLE \
+    python main_chir.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --csp_no $VARIABLE \
                                 --log_dir ./logs/molnet_chirality/ \
                                 --resume_path ./check_point/molnet_agilent.pt \
                                 --transfer \
-                                --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                --checkpoint ./check_point_all/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
                                 --device 0
 
     echo "Done!"

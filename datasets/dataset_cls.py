@@ -297,3 +297,4 @@ class ChiralityDataset_infer(BaseDataset):
 		X, mask = self.create_X(mol, self.num_points)
 		mb = int(self.csp_no)
 		return smiles, mb, X, mask
+

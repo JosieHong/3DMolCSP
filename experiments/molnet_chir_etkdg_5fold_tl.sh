@@ -7,7 +7,7 @@
 for VARIABLE in {0..17}
 do
     
-    echo "python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --k_fold 5 --csp_no $VARIABLE \
+    echo "python main_chir_kfold.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --k_fold 5 --csp_no $VARIABLE \
                                 --log_dir ./logs/molnet_chirality/ \
                                 --resume_path ./check_point/molnet_agilent.pt \
                                 --transfer \
@@ -15,7 +15,7 @@ do
                                 --result_path ./results/molnet_chirality_cls_etkdg_csp$VARIABLE-5fold_tl.csv \
                                 --device 2"
 
-    python main_char_kfold.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --k_fold 5 --csp_no $VARIABLE \
+    python main_chir_kfold.py --config ./configs/molnet_chirality_cls_etkdg_tl.yaml --k_fold 5 --csp_no $VARIABLE \
                                 --log_dir ./logs/molnet_chirality/ \
                                 --resume_path ./check_point/molnet_agilent.pt \
                                 --transfer \
