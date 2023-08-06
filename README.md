@@ -21,56 +21,79 @@ pip install lxml tqdm pandas pyteomics PyYAML scikit-learn
 
 ## Experiments
 
-### 1. Preprocess
+### Five-fold cross-validation on chirBase
+
+1. Preprocess ChirBase
 
 ```bash
-python ./preprocess/preprocess_chirality.py \
---input ./data/Chirality/chirbase.sdf \
---output ./data/Chirality/chirbase_clean.sdf \
+# preprocessing
+python ./preprocess/preprocess_chirbase.py \
+--input ./data/ChirBase/chirbase.sdf \
+--output ./data/ChirBase/chirbase_clean.sdf \
 --csp_setting ./preprocess/chirality_stationary_phase_list.csv
 
-python ./preprocess/preprocess_chirality.py \
---input ./data/Chirality/chirbase.sdf \
---output ./data/Chirality/chirbase_clean2.sdf \
+python ./preprocess/preprocess_chirbase.py \
+--input ./data/ChirBase/chirbase.sdf \
+--output ./data/ChirBase/chirbase_clean2.sdf \
 --csp_setting ./preprocess/chirality_stationary_phase_list.csv
 
-python ./preprocess/gen_conformers.py --path ./data/Chirality/chirbase_clean.sdf --conf_type etkdg 
-python ./preprocess/gen_conformers.py --path ./data/Chirality/chirbase_clean2.sdf --conf_type etkdg
+python ./preprocess/preprocess_chirbase.py \
+--input ./data/ChirBase/chirbase.sdf \
+--output ./data/ChirBase/chirbase_clean3.sdf \
+--csp_setting ./preprocess/chirality_stationary_phase_list.csv
+
+python ./preprocess/preprocess_chirbase.py \
+--input ./data/ChirBase/chirbase.sdf \
+--output ./data/ChirBase/chirbase_clean4.sdf \
+--csp_setting ./preprocess/chirality_stationary_phase_list.csv
+
+# preprocess results: 
+# ~~1. no duplicated (76795)~~
+# ~~2. duplicated the isomer SMILES (43967)~~
+# ~~3. duplicated the non-isomer SMILES (43700)~~
+# 4. duplicated the isomer SMILES with the same chiral atom (43785)
+
+# generate enantiomers
+python ./preprocess/convert_enantiomers.py --input ./data/ChirBase/chirbase_clean4.sdf --output ./data/ChirBase/chirbase_clean4_enatiomers.sdf
+
+# generate 3D conformations
+python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean4.sdf --conf_type etkdg
+python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean4_enatiomers.sdf --conf_type etkdg
 
 # (option) OMEGA conformations are available
-python ./preprocess/gen_conformers.py --path ./data/Chirality/chirbase_clean.sdf --conf_type omega
+python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type omega
 
 # (option) randomly split training and validation set for section 3
-python ./preprocess/random_split_sdf.py --input ./data/Chirality/chirbase_clean2_etkdg.sdf --output_train ./data/Chirality/chirbase_clean2_etkdg_train.sdf --output_test ./data/Chirality/chirbase_clean2_etkdg_test.sdf
-python ./preprocess/random_split_sdf.py --input ./data/Chirality/chirbase_clean_omega.sdf --output_train ./data/Chirality/chirbase_clean_omega_train.sdf --output_test ./data/Chirality/chirbase_clean_omega_test.sdf
+python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean4_etkdg.sdf --output_train ./data/ChirBase/chirbase_clean4_etkdg_train.sdf --output_test ./data/ChirBase/chirbase_clean4_etkdg_test.sdf
+python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean_omega.sdf --output_train ./data/ChirBase/chirbase_clean_omega_train.sdf --output_test ./data/ChirBase/chirbase_clean_omega_test.sdf
 ```
 
-### 2. Five-fold cross-validation
+2. Five-fold cross-validation
 
 ```bash
 # training from scratch
-nohup bash ./experiments/molnet_chir_etkdg_5fold.sh > molnet_chir_etkdg_5fold.out 
+nohup bash ./experiments/train_chir_etkdg_5fold.sh > molnet_chir_etkdg_5fold.out 
+nohup bash ./experiments/train_chir_etkdg_5fold_p1.sh > molnet_chir_etkdg_5fold_p1.out 
+nohup bash ./experiments/train_chir_etkdg_5fold_p2.sh > molnet_chir_etkdg_5fold_p2.out 
 
 # traning from pre-trained model
-nohup bash ./experiments/molnet_chir_etkdg_5fold_tl.sh > molnet_chir_etkdg_5fold_tl.out 
-
-# input enantiomers
-nohup bash ./experiments/molnet_chir2_etkdg_5fold.sh > molnet_chir2_etkdg_5fold.out 
+nohup bash ./experiments/train_chir_etkdg_5fold_tl.sh > molnet_chir_etkdg_5fold_tl.out 
+nohup bash ./experiments/train_chir_etkdg_5fold_tl_p1.sh > molnet_chir_etkdg_5fold_tl_p1.out 
+nohup bash ./experiments/train_chir_etkdg_5fold_tl_p2.sh > molnet_chir_etkdg_5fold_tl_p2.out 
 ```
 
-## 3. Training (using all data) & test on all CSPs
+### Training on ChirBase and testing on CMRT
+
+1. Training (using all data)
 
 ```bash
 # traning from pre-trained model
-nohup bash ./experiments/molnet_chir_etkdg_tl.sh > molnet_chir_etkdg_tl.out 
-nohup bash ./experiments/molnet_chir_etkdg_tl_p1.sh > molnet_chir_etkdg_tl_p1.out 
-nohup bash ./experiments/molnet_chir_etkdg_tl_p2.sh > molnet_chir_etkdg_tl_p2.out 
-
-# infer on all CSPs
-nohup bash ./experiments/molnet_chir_etkdg_tl_infer.sh > molnet_chir_etkdg_tl_infer.out
+nohup bash ./experiments/train_chir_etkdg_tl.sh > molnet_chir_etkdg_tl.out 
+nohup bash ./experiments/train_chir_etkdg_tl_p1.sh > molnet_chir_etkdg_tl_p1_0804.out 
+nohup bash ./experiments/train_chir_etkdg_tl_p2.sh > molnet_chir_etkdg_tl_p2_0804.out 
 ```
 
-## 4. Test on CMRT
+2. Preprocess CMRT
 
 ```bash
 # preprocessing
@@ -79,10 +102,31 @@ python ./preprocess/preprocess_cmrt.py \
 --output ./data/CMRT/cmrt_clean.sdf \
 --csp_setting ./preprocess/chirality_stationary_phase_list.csv
 
-python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean.sdf --conf_type etkdg
+# generate enantiomers
+python ./preprocess/convert_enantiomers.py --input ./data/CMRT/cmrt_clean.sdf --output ./data/CMRT/cmrt_clean_enatiomers.sdf
 
-# infer on CMRT
+# generate 3D conformations
+python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean.sdf --conf_type etkdg
+python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean_enatiomers.sdf --conf_type etkdg
+```
+
+3. infer on CMRT
+
+```bash
+# inference on one enantiomer
 nohup bash ./experiments/molnet_cmrt_etkdg_tl_infer.sh > molnet_cmrt_etkdg_tl_infer.out 
+
+# inference on the other enantiomer
+nohup bash ./experiments/molnet_cmrt_etkdg_tl_infer.sh > molnet_cmrt_etkdg_tl_infer.out
+```
+
+### ~~5. Training on ChirBase excluding CMRT~~
+
+```bash
+# preprocessing
+# ChirBase - CMRT
+python ./preprocess/minus_sdf.py --minuend ./data/ChirBase/chirbase_clean4.sdf --subtrahend ./data/CMRT/cmrt_clean.sdf --output ./data/ChirBase/chirbase_minus_cmrt_clean.sdf
+nohup python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_minus_cmrt_clean.sdf --conf_type etkdg
 ```
 
 ### ~~3. Train & Eval (multi-task learning)~~
@@ -116,3 +160,4 @@ ssh -N -f -L localhost:8888:localhost:8889 yuhhong@ampere.luddy.indiana.edu
 # visit: 
 # http://localhost:8888/
 ```
+

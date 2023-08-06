@@ -159,6 +159,12 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-data/Chirality/
 results/
-data/batch_drop_img/
+data/ChirBase/
+data/CMRT/
+data/compare_chirbase_cmrt.csv
+notebooks/*.png
+notebooks/*.eps
+notebooks/*.xlsx
+notebooks/*.csv
+*.bak

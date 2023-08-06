@@ -1,7 +1,12 @@
+'''
+Date: 2022-11-21 15:53:39
+LastEditors: yuhhong
+LastEditTime: 2022-11-22 23:35:52
+'''
 import os
 import argparse
 import pprint
-import pandas as pd 
+import pandas as pd
 
 from rdkit import Chem
 # suppress rdkit warning
@@ -23,48 +28,39 @@ preprocess:
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Preprocess the Data')
-	parser.add_argument('--input', type=str, default = '',
+	parser.add_argument('--input', type=str, required=True, 
 						help='path to input data')
 	parser.add_argument('--csp_setting', type=str, required=True, 
 						help='path to csp settings')
-	parser.add_argument('--output', type=str, default = '',
+	parser.add_argument('--output', type=str, required=True, 
 						help='path to output data')
 	args = parser.parse_args()
 
 	# load the csp settings
 	assert os.path.exists(args.csp_setting)
 	df_csp = pd.read_csv(args.csp_setting)
-	CSP_DICT = {n: [e, c] for n, e, c in zip(df_csp['Short_Name'].tolist(), 
+	df_csp['CSP_ID'] = df_csp['CSP_ID'].astype(str)
+	CSP_DICT = {i: [e, c] for i, e, c in zip(df_csp['CSP_ID'].tolist(), 
 									df_csp['CSP_Encode'].tolist(), 
-									df_csp['CSP_Category'].tolist()) if not pd.isnull(n)}
+									df_csp['CSP_Category'].tolist())}
 	print('Load the CSP settings: ')
 	pp = pprint.PrettyPrinter(indent=4)
 	pp.pprint(CSP_DICT)
 
-	# calculate k2/k1
-	# k2/k1 ~~ (t2-2.9)/(t1-2.9)
-	df_rt = pd.read_csv(args.input, index_col=0)
-
-	# df_rt['SMILES_iso'] = df_rt['SMILES']
-	# df_rt['SMILES'] = df_rt['SMILES'].apply(lambda x: Chem.MolToSmiles(Chem.MolFromSmiles(x), isomericSmiles=False))
-	df_rt = df_rt[df_rt['RT'] != 0]
-	df_rt = df_rt.groupby(['index']).filter(lambda x: len(x) == 2)
-
-	df_rt_alpha = df_rt.groupby('index').apply(lambda x: (x['RT'].max() - 2.9) / (x['RT'].min() -2.9)).to_frame(name='K2/K1')
-	df_rt_alpha = df_rt_alpha.merge(df_rt[['index', 'SMILES', 'Column']], on='index', how='left')
-	df_rt_alpha = df_rt_alpha.drop_duplicates(['index'], keep='first').sort_index()
-
-	# convert dataframe into mol_list
+	supp = Chem.SDMolSupplier(args.input)
 	out_mols = []
-	for idx, row in df_rt_alpha.iterrows(): 
-		mol = Chem.MolFromSmiles(row['SMILES'])
+	mobile_phase = []
+	print('Get {} data from {}'.format(len(supp), args.input))
 
-		# filter the molecules 
+	# filter out the noise molecules (double- or triple- labeled) &
+	# filter out by conditions
+	df_dict = {'SMILES': [], 'SMILES_iso': [], 'MB': [], 'K2/K1': [], 'Chiral_Tag': []}
+	for mol in supp: 
 		if mol is None:
 			continue
 
 		# remove invalid molecular blocks
-		# e.g.
+		# e.g. 
 		# 22      RDKit          2D
 		# 0
 		# 39  25 28  0  0  0  0  0  0  0  0999 V2000
@@ -91,14 +87,43 @@ if __name__ == '__main__':
 				break
 		if flag_remove: 
 			continue
-
-		mb_short = row['Column']
-		if mb_short not in CSP_DICT.keys(): 
+		
+		# if mol.HasProp('mobile_phase'): 
+		# 	mb = mol.GetProp('mobile_phase')
+		if mol.HasProp('csp_no'): 
+			mb = mol.GetProp('csp_no')
+		else:
+			print('Unknow mobile phase')
+			continue
+		if mb not in CSP_DICT.keys(): 
+			print('Undefined mobile phase: {}'.format(mb))
 			continue
 
+		smiles = Chem.CanonSmiles(Chem.MolToSmiles(mol, isomericSmiles=False))
+		smiles_iso = Chem.CanonSmiles(Chem.MolToSmiles(mol, isomericSmiles=True))
+		chir = round(float(mol.GetProp('k2/k1')), 4)
+		# y = convert2cls(chir, str(CSP_DICT[mb][1]))
+		chir_tag = ';'.join([str(atom.GetChiralTag()) for atom in Chem.MolFromSmiles(smiles_iso).GetAtoms()])
+
+		df_dict['SMILES'].append(smiles)
+		df_dict['SMILES_iso'].append(smiles_iso)
+		df_dict['K2/K1'].append(chir)
+		df_dict['MB'].append(mb)
+		# df_dict['Y'].append(y)
+		df_dict['Chiral_Tag'].append(chir_tag)
+
+	df = pd.DataFrame.from_dict(df_dict)
+	# df_uniq = df[df.duplicated(subset=['SMILES', 'MB', 'Y'])==False] 
+	df_uniq = df.sort_values(['SMILES', 'Chiral_Tag', 'MB', 'K2/K1'], ascending=False).drop_duplicates(['SMILES', 'Chiral_Tag', 'MB'], keep='first').sort_index()
+
+	# convert dataframe into mol_list
+	out_mols = []
+	for idx, row in df_uniq.iterrows(): 
+		mol = Chem.MolFromSmiles(row['SMILES_iso'])
 		mol.SetProp('k2/k1', str(row['K2/K1']))
-		mol.SetProp('encode_mobile_phase', str(CSP_DICT[mb_short][0]))
-		mol.SetProp('mobile_phase_category', str(CSP_DICT[mb_short][1]))
+		mb = row['MB']
+		mol.SetProp('encode_mobile_phase', str(CSP_DICT[mb][0]))
+		mol.SetProp('mobile_phase_category', str(CSP_DICT[mb][1]))
 		out_mols.append(mol)
 
 	print('Writing {} data to {}'.format(len(out_mols), args.output))

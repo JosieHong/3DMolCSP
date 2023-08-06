@@ -2,9 +2,12 @@ model: 'molnet'
 dataset: 'chirality'
 
 paths: 
-  train_data: './data/Chirality/chirbase_clean_etkdg_train.sdf'
-  valid_data: './data/Chirality/chirbase_clean_etkdg_test.sdf'
-  all_data: './data/Chirality/chirbase_clean_etkdg.sdf' # for k-fold
+  train_data: './data/ChirBase/chirbase_clean4_etkdg.sdf' 
+  train_data_enantiomer: './data/ChirBase/chirbase_clean4_enatiomers_etkdg.sdf'
+  valid_data: './data/ChirBase/chirbase_clean4_etkdg.sdf'
+  all_data: './data/ChirBase/chirbase_clean4_etkdg.sdf' # for k-fold
+  all_data_enantiomer: './data/ChirBase/chirbase_clean4_enatiomers_etkdg.sdf' # for k-fold
+  test_data: './data/CMRT/cmrt_clean_etkdg.sdf' # for inference
 
 model_para: 
   in_channels: 21

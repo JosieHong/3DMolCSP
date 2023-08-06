@@ -31,7 +31,7 @@ from models.molnet import MolNet
 from models.pointnet import PointNet
 from models.schnet import SchNet
 
-
+TEST_BATCH_SIZE = 1 # global variable in inference
 
 def inference(model, device, loader, num_points, out_cls, csp_num): 
 	model.eval()
@@ -44,12 +44,12 @@ def inference(model, device, loader, num_points, out_cls, csp_num):
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
 
-		idx_base = torch.arange(0, 2, device=device).view(-1, 1, 1) * num_points
+		idx_base = torch.arange(0, TEST_BATCH_SIZE, device=device).view(-1, 1, 1) * num_points
 
 		with torch.no_grad(): 
 			pred = model(x, None, idx_base)
 
-		y_pred.append(pred.view(2, -1).detach().cpu())
+		y_pred.append(pred.view(TEST_BATCH_SIZE, -1).detach().cpu())
 		names.extend(name)
 		mbs.extend(mb.tolist())
 
@@ -57,83 +57,87 @@ def inference(model, device, loader, num_points, out_cls, csp_num):
 	return names, mbs, y_pred
 
 def batch_filter(supp): 
-    for mol in supp: # remove empty molecule
-        if mol is None:
-            continue
-        if len(Chem.MolToMolBlock(mol).split("\n")) <= 6: 
-            continue
-        yield mol
+	for mol in supp: # remove empty molecule
+		if mol is None:
+			continue
+		if len(Chem.MolToMolBlock(mol).split("\n")) <= 6: 
+			continue
+		yield mol
 
 
 
 if __name__ == "__main__": 
-    # Training settings
-    parser = argparse.ArgumentParser(description='Molecular Properties Prediction')
-    parser.add_argument('--config', type=str, required=True, 
-                        help='Path to configuration')
-    parser.add_argument('--csp_no', type=int, default=0, required=True, 
-                        help='charility phase number [0, 19]')
-    parser.add_argument('--resume_path', type=str, default='', required=True, 
-                        help='Pretrained model path')
-    parser.add_argument('--result_path', type=str, default='', required=True,
+	# Training settings
+	parser = argparse.ArgumentParser(description='Molecular Properties Prediction')
+	parser.add_argument('--config', type=str, required=True, 
+						help='Path to configuration')
+	parser.add_argument('--csp_no', type=int, default=0, required=True, 
+						help='charility phase number [0, 19]')
+	parser.add_argument('--resume_path', type=str, default='', required=True, 
+						help='Pretrained model path')
+	parser.add_argument('--result_path', type=str, default='', required=True,
 						help='Results path')
 
-    parser.add_argument('--device', type=int, default=0,
-                        help='which gpu to use if any (default: 0)')
-    parser.add_argument('--no_cuda', type=bool, default=False,
-                        help='enables CUDA training')
+	parser.add_argument('--device', type=int, default=0,
+						help='which gpu to use if any (default: 0)')
+	parser.add_argument('--no_cuda', type=bool, default=False,
+						help='enables CUDA training')
 
-    args = parser.parse_args()
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
+	args = parser.parse_args()
+	args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-    np.random.seed(42)
-    torch.manual_seed(42)
-    torch.cuda.manual_seed(42)
+	np.random.seed(42)
+	torch.manual_seed(42)
+	torch.cuda.manual_seed(42)
 
-    # load the configuration file
-    with open(args.config, 'r') as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-    
-    device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
-    if config['model'] == 'molnet': 
-        model = MolNet(config['model_para'], args.device).to(device)
-    elif config['model'] == 'dgcnn':
-        model = DGCNN(config['model_para'], args.device).to(device) 
-    elif config['model'] == 'pointnet': 
-        model = PointNet(config['model_para'], args.device).to(device) 
-    elif config['model'] == 'schnet': 
-        model = SchNet(config['model_para'], args.device).to(device)
-    else:
-        raise ValueError('Not implemented model')
-    num_params = sum(p.numel() for p in model.parameters())
-    # print(f'{str(model)} #Params: {num_params}')
-    print('#Params: {}'.format(num_params))
-    
-    print("Loading the data...")
-    supp = Chem.SDMolSupplier(config['paths']['test_data'])
-    test_set = ChiralityDataset_infer([item for item in batch_filter(supp)], 
-								        num_points=config['model_para']['num_atoms'], 
-								        csp_no=args.csp_no, 
-								        data_augmentation=False)
-    test_loader = DataLoader(test_set,
-                                batch_size=2,
-                                num_workers=config['train_para']['num_workers'],
-                                drop_last=True,)
-    print('Load {} test data from {}.'.format(len(test_set), config['paths']['test_data']))
+	results_dir = "/".join(args.result_path.split('/')[:-1])
+	os.makedirs(results_dir, exist_ok = True)
+	print('Create the results directory, {}'.format(results_dir))
 
-    print("Load the model...")
-    model.load_state_dict(torch.load(args.resume_path)['model_state_dict'])
-    model.to(device) 
+	# load the configuration file
+	with open(args.config, 'r') as f:
+		config = yaml.load(f, Loader=yaml.FullLoader)
+	
+	device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
+	if config['model'] == 'molnet': 
+		model = MolNet(config['model_para'], args.device).to(device)
+	elif config['model'] == 'dgcnn':
+		model = DGCNN(config['model_para'], args.device).to(device) 
+	elif config['model'] == 'pointnet': 
+		model = PointNet(config['model_para'], args.device).to(device) 
+	elif config['model'] == 'schnet': 
+		model = SchNet(config['model_para'], args.device).to(device)
+	else:
+		raise ValueError('Not implemented model')
+	num_params = sum(p.numel() for p in model.parameters())
+	# print(f'{str(model)} #Params: {num_params}')
+	print('#Params: {}'.format(num_params))
+	
+	print("Loading the data...")
+	supp = Chem.SDMolSupplier(config['paths']['test_data'])
+	test_set = ChiralityDataset_infer([item for item in batch_filter(supp)], 
+										num_points=config['model_para']['num_atoms'], 
+										csp_no=args.csp_no, 
+										data_augmentation=False)
+	test_loader = DataLoader(test_set,
+								batch_size=TEST_BATCH_SIZE, 
+								num_workers=config['train_para']['num_workers'],
+								drop_last=True,)
+	print('Load {} test data from {}.'.format(len(test_set), config['paths']['test_data']))
 
-    print('Evaluating...')
-    names, mbs, y_pred = inference(model, device, test_loader, 
-                                            config['model_para']['num_atoms'], 
-                                            config['model_para']['out_channels'],
-                                            config['model_para']['csp_num'])
-    y_pred_out = []
-    for y in y_pred:
-        y_pred_out.append(','.join([str(i) for i in y.tolist()]))
+	print("Load the model...")
+	model.load_state_dict(torch.load(args.resume_path, map_location=device)['model_state_dict'])
+	model.to(device) 
 
-    res_df = pd.DataFrame({'SMILES': names, 'MB': mbs, 'Pred': y_pred_out})
-    res_df.to_csv(args.result_path, sep='\t')
-    print('Save the test results to {}'.format(args.result_path))
+	print('Evaluating...')
+	names, mbs, y_pred = inference(model, device, test_loader, 
+											config['model_para']['num_atoms'], 
+											config['model_para']['out_channels'],
+											config['model_para']['csp_num'])
+	y_pred_out = []
+	for y in y_pred:
+		y_pred_out.append(','.join([str(i) for i in y.tolist()]))
+
+	res_df = pd.DataFrame({'SMILES': names, 'MB': mbs, 'Pred': y_pred_out})
+	res_df.to_csv(args.result_path, sep='\t')
+	print('Save the test results to {}'.format(args.result_path))

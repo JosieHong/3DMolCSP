@@ -144,6 +144,17 @@ class ChiralityDataset(BaseDataset):
 					continue
 				self.supp.append(mol)
 	
+	def count_cls(self, out_cls, indices):
+		print('Count the dataset...')
+		train_supp = [mol for i, mol in enumerate(self.supp) if i in indices]
+
+		samples_per_cls = [0] * out_cls
+		for i, mol in enumerate(train_supp): 
+			chir = float(mol.GetProp('k2/k1'))
+			y = self.convert2cls(chir, mol.GetProp('csp_category'))
+			samples_per_cls[y] += 1
+		return samples_per_cls
+
 	def balance_indices(self, indices): 
 		print('Balance the dataset...')
 		train_supp = [mol for i, mol in enumerate(self.supp) if i in indices]
@@ -229,7 +240,7 @@ class ChiralityDataset(BaseDataset):
 			output_indices += balance_indices
 		return output_indices
 
-	def least_common_multiple(self, num):
+	def least_common_multiple(self, num): 
 		minimum = 1
 		for i in num:
 			minimum = int(i)*int(minimum) / math.gcd(int(i), int(minimum))

@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, SubsetRandomSampler
+from torch.utils.data import DataLoader, SubsetRandomSampler, ConcatDataset
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import MultiStepLR
 import random
@@ -32,7 +32,7 @@ from models.molnet import MolNet
 from models.pointnet import PointNet
 from models.schnet import SchNet
 
-
+TEST_BATCH_SIZE = 1 # global variable in validation
 
 def cal_roc_auc_score(y_true, y_pred, multi_class='ovr'): 
 	y_true = y_true.reshape(-1, 1)
@@ -103,7 +103,7 @@ def eval(model, device, loader, batch_size, num_points, out_cls, csp_num):
 		mask = mask.to(device).to(torch.float32)
 		y = y.to(device)
 
-		idx_base = torch.arange(0, 2, device=device).view(-1, 1, 1) * num_points
+		idx_base = torch.arange(0, TEST_BATCH_SIZE, device=device).view(-1, 1, 1) * num_points
 
 		with torch.no_grad(): 
 			pred = model(x, None, idx_base)
@@ -130,7 +130,7 @@ def batch_filter(supp):
 			continue
 		yield mol
 
-def load_data_fold(dataset, split_indices, fold_i, num_workers, batch_size): 
+def load_data_fold(dataset, dataset_ena, split_indices, fold_i, num_workers, batch_size): 
 	train_indices = []
 	valid_indices = []
 	for i, indices in enumerate(split_indices): 
@@ -142,16 +142,20 @@ def load_data_fold(dataset, split_indices, fold_i, num_workers, batch_size):
 	train_indices = dataset.balance_indices(train_indices) # j0sie: please use this line to make balance sampling
 	print('# train: {}, # valid: {}'.format(len(train_indices), len(valid_indices)))
 
+	train_indices += [i+len(dataset) for i in train_indices] # add enantiomers (use the same indexes for two configurations prohibit data leaking)
+	valid_indices += [i+len(dataset) for i in valid_indices]
+								
 	train_sampler = SubsetRandomSampler(train_indices)
 	valid_sampler = SubsetRandomSampler(valid_indices)
 
-	train_loader = DataLoader(dataset,
+	all_dataset = ConcatDataset([dataset, dataset_ena]) # concat two configurations' datasets
+	train_loader = DataLoader(all_dataset,
 								batch_size=batch_size,
 								num_workers=num_workers,
 								drop_last=True,
 								sampler=train_sampler)
-	valid_loader = DataLoader(dataset,
-								batch_size=2, 
+	valid_loader = DataLoader(all_dataset,
+								batch_size=TEST_BATCH_SIZE, 
 								num_workers=num_workers,
 								drop_last=True,
 								sampler=valid_sampler)
@@ -228,6 +232,12 @@ if __name__ == "__main__":
 								num_csp=config['model_para']['csp_num'], 
 								csp_no=args.csp_no, 
 								data_augmentation=False)
+	supp_ena = Chem.SDMolSupplier(config['paths']['all_data_enantiomer'])
+	dataset_ena = ChiralityDataset([item for item in batch_filter(supp_ena)], 
+								num_points=config['model_para']['num_atoms'], 
+								num_csp=config['model_para']['csp_num'], 
+								csp_no=args.csp_no, 
+								data_augmentation=False)
 	print('Load {} data from {}.'.format(len(dataset), config['paths']['all_data']))
 	# split the indices into k-fold
 	each_chunk = len(dataset) // args.k_fold
@@ -241,7 +251,7 @@ if __name__ == "__main__":
 	records = {'best_acc': [], 'best_auc': []}
 	for fold_i in range(args.k_fold): 
 		print('\n# --------------- Fold-{} --------------- #'.format(fold_i)) 
-		train_loader, valid_loader = load_data_fold(dataset, 
+		train_loader, valid_loader = load_data_fold(dataset, dataset_ena, 
 													split_indices, 
 													fold_i, 
 													num_workers=config['train_para']['num_workers'], 
@@ -286,12 +296,10 @@ if __name__ == "__main__":
 				model.load_state_dict(encoder_dict, strict=False) 
 			else:
 				print("Load the checkpoints...")
-				model.load_state_dict(torch.load(resume_path_fold)['model_state_dict'])
-				optimizer.load_state_dict(torch.load(resume_path_fold)['optimizer_state_dict'])
-				scheduler.load_state_dict(torch.load(resume_path_fold)['scheduler_state_dict'])
-				best_valid_auc = torch.load(resume_path_fold)['best_val_auc']
-
-		model.to(device) 
+				model.load_state_dict(torch.load(resume_path_fold, map_location=device)['model_state_dict'])
+				optimizer.load_state_dict(torch.load(resume_path_fold, map_location=device)['optimizer_state_dict'])
+				scheduler.load_state_dict(torch.load(resume_path_fold, map_location=device)['scheduler_state_dict'])
+				best_valid_auc = torch.load(resume_path_fold, map_location=device)['best_val_auc']
 
 		if args.log_dir != '':
 			writer = SummaryWriter(log_dir=args.log_dir)
@@ -367,10 +375,10 @@ if __name__ == "__main__":
 		# output the best validation results
 		if args.result_path: 
 			print("Load the best results...")
-			model.load_state_dict(torch.load(check_point_fold)['model_state_dict'])
-			optimizer.load_state_dict(torch.load(check_point_fold)['optimizer_state_dict'])
-			scheduler.load_state_dict(torch.load(check_point_fold)['scheduler_state_dict'])
-			best_valid_auc = torch.load(check_point_fold)['best_val_auc']
+			model.load_state_dict(torch.load(check_point_fold, map_location=device)['model_state_dict'])
+			optimizer.load_state_dict(torch.load(check_point_fold, map_location=device)['optimizer_state_dict'])
+			scheduler.load_state_dict(torch.load(check_point_fold, map_location=device)['scheduler_state_dict'])
+			best_valid_auc = torch.load(check_point_fold, map_location=device)['best_val_auc']
 
 			print('Evaluating...')
 			names, mbs, y_true, y_pred = eval(model, device, valid_loader, 
