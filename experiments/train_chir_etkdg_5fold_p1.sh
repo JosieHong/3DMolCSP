@@ -18,17 +18,30 @@ do
                                     --device 0
 
         echo "Done!"
+    elif [[ "$VARIABLE" =~ ^(8|9|11|15)$ ]]; then
+        echo "python main_chir_kfold.py --config ./configs/molnet_train_xl.yaml --k_fold 5 --csp_no $VARIABLE \
+--log_dir ./logs/molnet_chirality/ \
+--checkpoint ./check_point0804/molnet_chirality_cls_etkdg_csp$VARIABLE.pt --device 0"
+
+        python main_chir_kfold.py --config ./configs/molnet_train_xl.yaml --k_fold 5 --csp_no $VARIABLE \
+                                    --log_dir ./logs/molnet_chirality/ \
+                                    --checkpoint ./check_point0804/molnet_chirality_cls_etkdg_csp$VARIABLE-5fold.pt \
+                                    --result_path ./results0804/molnet_chirality_cls_etkdg_csp$VARIABLE-5fold.csv \
+                                    --device 0
+
+        echo "Done!"
     else
         echo "python main_chir_kfold.py --config ./configs/molnet_train_l.yaml --k_fold 5 --csp_no $VARIABLE \
 --log_dir ./logs/molnet_chirality/ \
 --checkpoint ./check_point0804/molnet_chirality_cls_etkdg_csp$VARIABLE.pt --device 0"
 
-    python main_chir_kfold.py --config ./configs/molnet_train_l.yaml --k_fold 5 --csp_no $VARIABLE \
-                                --log_dir ./logs/molnet_chirality/ \
-                                --checkpoint ./check_point0804/molnet_chirality_cls_etkdg_csp$VARIABLE-5fold.pt \
-                                --result_path ./results0804/molnet_chirality_cls_etkdg_csp$VARIABLE-5fold.csv \
-                                --device 0
+        python main_chir_kfold.py --config ./configs/molnet_train_l.yaml --k_fold 5 --csp_no $VARIABLE \
+                                    --log_dir ./logs/molnet_chirality/ \
+                                    --checkpoint ./check_point0804/molnet_chirality_cls_etkdg_csp$VARIABLE-5fold.pt \
+                                    --result_path ./results0804/molnet_chirality_cls_etkdg_csp$VARIABLE-5fold.csv \
+                                    --device 0
 
-    echo "Done!"
+        echo "Done!"
     fi
 done
+

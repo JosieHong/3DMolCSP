@@ -21,7 +21,7 @@ pip install lxml tqdm pandas pyteomics PyYAML scikit-learn
 
 ## Experiments
 
-### Five-fold cross-validation on chirBase
+### Five-fold cross-validation on ChirBase
 
 1. Preprocess ChirBase
 
@@ -114,10 +114,10 @@ python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean_enatiomers.s
 
 ```bash
 # inference on one enantiomer
-nohup bash ./experiments/molnet_cmrt_etkdg_tl_infer.sh > molnet_cmrt_etkdg_tl_infer.out 
+nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out 
 
 # inference on the other enantiomer
-nohup bash ./experiments/molnet_cmrt_etkdg_tl_infer.sh > molnet_cmrt_etkdg_tl_infer.out
+nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out
 ```
 
 ### ~~5. Training on ChirBase excluding CMRT~~

@@ -1,0 +1,33 @@
+model: 'molnet'
+dataset: 'chirality'
+
+paths: 
+  train_data: './data/ChirBase/chirbase_clean4_etkdg.sdf' 
+  train_data_enantiomer: './data/ChirBase/chirbase_clean4_enatiomers_etkdg.sdf'
+  valid_data: './data/ChirBase/chirbase_clean4_etkdg.sdf'
+  all_data: './data/ChirBase/chirbase_clean4_etkdg.sdf' # for k-fold
+  all_data_enantiomer: './data/ChirBase/chirbase_clean4_enatiomers_etkdg.sdf' # for k-fold
+  test_data: './data/CMRT/cmrt_clean_etkdg.sdf' # for inference
+
+model_para: 
+  in_channels: 21
+  num_atoms: 100
+  num_add: 0
+  encoder_layers: [64, 64, 128, 256, 512, 1024]
+  emb_dim: 2048
+  k: 5
+  decoder_layers: [512, 256, 128, 64]
+  dropout: 0.3
+  csp_num: 1
+  out_channels: 4
+
+train_para:
+  batch_size: 256
+  accum_iter: 1
+  epochs: 200
+  lr: 0.00001
+  num_workers: 0
+  weight_decay: 0.01
+  scheduler: 
+    milestones: [10, 20, 40]
+    gamma: 0.5

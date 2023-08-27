@@ -251,7 +251,7 @@ class ChiralityDataset(BaseDataset):
 
 	def __getitem__(self, idx): 
 		mol = self.supp[idx]
-		smiles = Chem.MolToSmiles(mol)
+		smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
 		X, mask = self.create_X(mol, self.num_points)
 		chir = float(mol.GetProp('k2/k1'))
 		Y = self.convert2cls(chir, mol.GetProp('csp_category'))

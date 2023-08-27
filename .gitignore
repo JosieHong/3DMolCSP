@@ -163,8 +163,5 @@ results/
 data/ChirBase/
 data/CMRT/
 data/compare_chirbase_cmrt.csv
-notebooks/*.png
-notebooks/*.eps
-notebooks/*.xlsx
-notebooks/*.csv
+notebooks/
 *.bak

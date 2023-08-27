@@ -131,7 +131,7 @@ def batch_filter(supp):
 if __name__ == "__main__": 
 	# Training settings
 	parser = argparse.ArgumentParser(description='Molecular Properties Prediction')
-	parser.add_argument('--config', type=str, default = './configs/molnet_chirality_cls_etkdg_tl.yaml',
+	parser.add_argument('--config', type=str, default = './configs/molnet_train_s.yaml',
 						help='Path to configuration')
 	parser.add_argument('--csp_no', type=int, default=0,
 						help='charility phase number [0, 19]')

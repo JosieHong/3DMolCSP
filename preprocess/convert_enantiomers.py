@@ -25,8 +25,9 @@ def find_the_other_enantimer(smiles1):
 
 	flag = False
 	for mol2 in isomers: 
-		chir_tag2 = ';'.join(['0' if str(atom.GetChiralTag()) == 'CHI_UNSPECIFIED' else '1' for atom in mol1.GetAtoms()])
 		smiles2 = Chem.MolToSmiles(mol2, isomericSmiles=True)
+        mol2 = Chem.MolFromSmiles(smiles2)
+        chir_tag2 = ';'.join(['0' if str(atom.GetChiralTag()) == 'CHI_UNSPECIFIED' else '1' for atom in mol2.GetAtoms()])
 		if chir_tag2 == chir_tag1 and smiles2 != smiles1:
 			flag = True
 			break

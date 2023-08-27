@@ -166,13 +166,13 @@ def load_data_fold(dataset, dataset_ena, split_indices, fold_i, num_workers, bat
 if __name__ == "__main__":
 	# Training settings
 	parser = argparse.ArgumentParser(description='Molecular Properties Prediction')
-	parser.add_argument('--config', type=str, default = './configs/molnet_bbbp.yaml',
+	parser.add_argument('--config', type=str, default = './configs/molnet_train_s.yaml',
 						help='Path to configuration')
 	parser.add_argument('--csp_no', type=int, default=0,
 						help='Charility phase number [0, 19]')
 	parser.add_argument('--k_fold', type=int, default=10,
 						help='k for k-fold validation')
-	parser.add_argument('--log_dir', type=str, default="./logs/molnet_bbbp/", 
+	parser.add_argument('--log_dir', type=str, default="./logs/", 
 						help='Tensorboard log directory')
 	parser.add_argument('--checkpoint', type=str, default = '', 
 						help='Path to save checkpoint')
