@@ -32,33 +32,18 @@ python ./preprocess/preprocess_chirbase.py \
 --output ./data/ChirBase/chirbase_clean.sdf \
 --csp_setting ./preprocess/chirality_stationary_phase_list.csv
 
-python ./preprocess/preprocess_chirbase.py \
---input ./data/ChirBase/chirbase.sdf \
---output ./data/ChirBase/chirbase_clean2.sdf \
---csp_setting ./preprocess/chirality_stationary_phase_list.csv
-
-python ./preprocess/preprocess_chirbase.py \
---input ./data/ChirBase/chirbase.sdf \
---output ./data/ChirBase/chirbase_clean3.sdf \
---csp_setting ./preprocess/chirality_stationary_phase_list.csv
-
-python ./preprocess/preprocess_chirbase.py \
---input ./data/ChirBase/chirbase.sdf \
---output ./data/ChirBase/chirbase_clean4.sdf \
---csp_setting ./preprocess/chirality_stationary_phase_list.csv
-
 # preprocess results: 
 # ~~1. no duplicated (76795)~~
 # ~~2. duplicated the isomer SMILES (43967)~~
 # ~~3. duplicated the non-isomer SMILES (43700)~~
-# 4. duplicated the isomer SMILES with the same chiral atom (43785)
+# ~~4. duplicated the isomer SMILES with the same chiral atom (43785)~~
 
 # generate enantiomers
-python ./preprocess/convert_enantiomers.py --input ./data/ChirBase/chirbase_clean4.sdf --output ./data/ChirBase/chirbase_clean4_enatiomers.sdf
+python ./preprocess/convert_enantiomers.py --input ./data/ChirBase/chirbase_clean.sdf --output ./data/ChirBase/chirbase_clean_enatiomers.sdf
 
 # generate 3D conformations
-python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean4.sdf --conf_type etkdg
-python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean4_enatiomers.sdf --conf_type etkdg
+python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type etkdg
+nohup python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean_enatiomers.sdf --conf_type etkdg > nohup_enan.out
 
 # (option) OMEGA conformations are available
 python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type omega

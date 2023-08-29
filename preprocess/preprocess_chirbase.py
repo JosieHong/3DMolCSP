@@ -113,8 +113,9 @@ if __name__ == '__main__':
 		df_dict['Chiral_Tag'].append(chir_tag)
 
 	df = pd.DataFrame.from_dict(df_dict)
-	# df_uniq = df[df.duplicated(subset=['SMILES', 'MB', 'Y'])==False] 
-	df_uniq = df.sort_values(['SMILES', 'Chiral_Tag', 'MB', 'K2/K1'], ascending=False).drop_duplicates(['SMILES', 'Chiral_Tag', 'MB'], keep='first').sort_index()
+	df_uniq = df.sort_values(['SMILES_iso', 'MB', 'K2/K1'], ascending=False).drop_duplicates(['SMILES_iso', 'MB'], keep='first').sort_index()
+	# We could guarantee that only one configuration of the pair of enantiomers shows up in ChirBase, so we could compare the isomeric SMILES directly. 
+	# df_uniq = df.sort_values(['SMILES', 'Chiral_Tag', 'MB', 'K2/K1'], ascending=False).drop_duplicates(['SMILES', 'Chiral_Tag', 'MB'], keep='first').sort_index()
 
 	# convert dataframe into mol_list
 	out_mols = []
