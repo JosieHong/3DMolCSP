@@ -10,6 +10,7 @@ import numpy as np
 import math
 
 from rdkit import Chem
+from rdkit.Geometry import Point3D
 from rdkit.Chem import AllChem
 from rdkit.Chem.Draw import rdDepictor
 from rdkit.Chem.rdchem import HybridizationType
@@ -102,49 +103,64 @@ class BaseDataset(Dataset):
 		points = np.concatenate((points_xyz, points[:, 3:]), axis=1)
 		return points
 
-	def ensemble_mol(self, mol, conformer):
-		mol = Chem.AddHs(mol) 
-		if conformer == '2d':
-			rdDepictor.Compute2DCoords(mol)
-		elif conformer == 'etkdg': 
-			try: # 3D comformers
-				# Original ETKDG:
-				# https://pubs.acs.org/doi/abs/10.1021/acs.jcim.5b00654
-				AllChem.EmbedMolecule(mol, AllChem.ETKDG(), randomSeed=42) 
-			except: # using 2D comformers
-				rdDepictor.Compute2DCoords(mol)
-		elif conformer == 'etkdgv3':
-			try: # 3D comformers
-				# An update describing ETKDGv3 and extensions to better 
-				# handle small rings and macrocycles: 
-				# https://pubs.acs.org/doi/abs/10.1021/acs.jcim.0c00025
-				AllChem.EmbedMolecule(mol, AllChem.ETKDGv3(), randomSeed=42)
-			except: # using 2D comformers
-				rdDepictor.Compute2DCoords(mol)
-		return mol
+	# def ensemble_mol(self, mol, conformer):
+	# 	mol = Chem.AddHs(mol) 
+	# 	if conformer == '2d':
+	# 		rdDepictor.Compute2DCoords(mol)
+	# 	elif conformer == 'etkdg': 
+	# 		try: # 3D comformers
+	# 			# Original ETKDG:
+	# 			# https://pubs.acs.org/doi/abs/10.1021/acs.jcim.5b00654
+	# 			AllChem.EmbedMolecule(mol, AllChem.ETKDG(), randomSeed=42) 
+	# 		except: # using 2D comformers
+	# 			rdDepictor.Compute2DCoords(mol)
+	# 	elif conformer == 'etkdgv3':
+	# 		try: # 3D comformers
+	# 			# An update describing ETKDGv3 and extensions to better 
+	# 			# handle small rings and macrocycles: 
+	# 			# https://pubs.acs.org/doi/abs/10.1021/acs.jcim.0c00025
+	# 			AllChem.EmbedMolecule(mol, AllChem.ETKDGv3(), randomSeed=42)
+	# 		except: # using 2D comformers
+	# 			rdDepictor.Compute2DCoords(mol)
+	# 	return mol
 
 
 
 class ChiralityDataset(BaseDataset): 
-	def __init__(self, supp, num_points=200, num_csp=16, csp_no=0, data_augmentation=False): 
+	def __init__(self, supp, num_points=200, num_csp=16, csp_no=0, flipping=False): 
 		super(ChiralityDataset, self).__init__()
 		self.num_points = num_points
 		self.num_csp = num_csp
-		self.data_augmentation = data_augmentation
 
 		if num_csp > 1: # multiple csp_no 
 			assert csp_no == 0, "Charility phase number can not be chosen, if multi_scp==True. "
 			self.supp = supp
 
 		else: # single csp_no 
-			self.supp = [] # without balance
-			for mol in supp: 
-				mb = int(mol.GetProp('adduct'))
-				if mb != csp_no: 
-					continue
-				self.supp.append(mol)
+			if flipping:
+				self.supp = [] # without balance
+				for mol in supp: 
+					mb = int(mol.GetProp('adduct'))
+					if mb != csp_no: 
+						continue
+
+					# flipping the conformation
+					conf = mol.GetConformer()
+					point_set = conf.GetPositions()
+					point_set[:, -1] *= -1
+					for i in range(mol.GetNumAtoms()): 
+						x, y, z = point_set[i]
+						conf.SetAtomPosition(i, Point3D(x,y,z))
+					self.supp.append(mol)
+			else: 
+				self.supp = [] # without balance
+				for mol in supp: 
+					mb = int(mol.GetProp('adduct'))
+					if mb != csp_no: 
+						continue
+					self.supp.append(mol)
 	
-	def count_cls(self, out_cls, indices):
+	def count_cls(self, out_cls, indices): 
 		print('Count the dataset...')
 		train_supp = [mol for i, mol in enumerate(self.supp) if i in indices]
 
@@ -251,6 +267,7 @@ class ChiralityDataset(BaseDataset):
 
 	def __getitem__(self, idx): 
 		mol = self.supp[idx]
+		mol_id = mol.GetProp('id')
 		smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
 		X, mask = self.create_X(mol, self.num_points)
 		chir = float(mol.GetProp('k2/k1'))
@@ -259,9 +276,9 @@ class ChiralityDataset(BaseDataset):
 		if self.num_csp > 1: 
 			multi_Y = [np.nan] * self.num_csp
 			multi_Y[mb] = Y
-			return smiles, mb, X, mask, torch.Tensor(multi_Y)
+			return mol_id, smiles, mb, X, mask, torch.Tensor(multi_Y)
 		else: 
-			return smiles, mb, X, mask, Y
+			return mol_id, smiles, mb, X, mask, Y
 
 	def convert2cls(self, chir, csp_category): 
 		if csp_category == '1': 
@@ -277,13 +294,13 @@ class ChiralityDataset(BaseDataset):
 		elif csp_category == '2': 
 			# For Pirkle CSPs:
 			if chir < 1.05: 
-			    y = 0
+				y = 0
 			elif chir < 1.15:
-			    y = 1
+				y = 1
 			elif chir < 2: 
-			    y = 2
+				y = 2
 			else:
-			    y = 3
+				y = 3
 		else:
 			raise Exception("The category for CSP should be 1 or 2, rather than {}.".format(csp_category))
 		return y
@@ -292,12 +309,23 @@ class ChiralityDataset(BaseDataset):
 
 # inference dataset
 class ChiralityDataset_infer(BaseDataset): 
-	def __init__(self, supp, num_points=200, csp_no=0, data_augmentation=False): 
+	def __init__(self, supp, num_points=200, csp_no=0, flipping=False): 
 		super(ChiralityDataset_infer, self).__init__()
-		self.supp = supp
 		self.num_points = num_points
 		self.csp_no = csp_no
-		self.data_augmentation = data_augmentation
+		if flipping:
+			self.supp = [] # without balance
+			for mol in supp: 
+				# flipping the conformation
+				conf = mol.GetConformer()
+				point_set = conf.GetPositions()
+				point_set[:, -1] *= -1
+				for i in range(mol.GetNumAtoms()): 
+					x, y, z = point_set[i]
+					conf.SetAtomPosition(i, Point3D(x,y,z))
+				self.supp.append(mol)
+		else:
+			self.supp = supp
 
 	def __len__(self):
 		return len(self.supp)

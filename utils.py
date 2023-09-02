@@ -11,15 +11,26 @@ import torch.nn.functional as F
 import numpy as np
 import random
 
+def avg_res(preds): 
+	preds = preds.Pred.values
+	avg_preds = []
+	for pred in preds:
+		avg_preds.append(pred.split(','))
 
+	avg_preds = np.array(avg_preds, dtype=np.float32)
+	avg_preds = np.average(avg_preds, axis=0)
+	return ','.join(avg_preds.astype('str'))
 
-def set_seed(seed):
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)
+def average_results_on_enantiomers(df): 
+	g = df.groupby(['ID', 'SMILES', 'MB'])
+	avg_df = g.apply(avg_res).to_frame('Pred').reset_index()
+	return avg_df
+
+def set_seed(seed): 
+	torch.manual_seed(seed)
+	torch.cuda.manual_seed_all(seed)
+	np.random.seed(seed)
+	random.seed(seed)
 
 # class ChamferLoss(nn.Module):
 
@@ -87,7 +98,7 @@ def set_seed(seed):
 #         pred = pred.view(-1, 1)
 #         target = target.view(-1, 1)
 #         pred = torch.cat((1-pred,pred), dim=1)
-        
+		
 #         class_mask = torch.zeros(pred.shape[0], pred.shape[1]).cuda()
 #         # scatter_(dim,index,src)->Tensor
 #         # Writes all values from the tensor src into self at the indices specified in the index tensor. 
@@ -110,95 +121,95 @@ def set_seed(seed):
 #             loss = batch_loss.mean()
 #         elif self.reduction == "sum":
 #             loss = batch_loss.sum()
-        
+		
 #         return loss
 
 
 """Pytorch implementation of Class-Balanced-Loss
    Reference: "Class-Balanced Loss Based on Effective Number of Samples" 
    Authors: Yin Cui and
-               Menglin Jia and
-               Tsung Yi Lin and
-               Yang Song and
-               Serge J. Belongie
+			   Menglin Jia and
+			   Tsung Yi Lin and
+			   Yang Song and
+			   Serge J. Belongie
    https://arxiv.org/abs/1901.05555, CVPR'19.
 """
 
 def focal_loss(labels, logits, alpha, gamma):
-    """Compute the focal loss between `logits` and the ground truth `labels`.
+	"""Compute the focal loss between `logits` and the ground truth `labels`.
 
-    Focal loss = -alpha_t * (1-pt)^gamma * log(pt)
-    where pt is the probability of being classified to the true class.
-    pt = p (if true class), otherwise pt = 1 - p. p = sigmoid(logit).
+	Focal loss = -alpha_t * (1-pt)^gamma * log(pt)
+	where pt is the probability of being classified to the true class.
+	pt = p (if true class), otherwise pt = 1 - p. p = sigmoid(logit).
 
-    Args:
-      labels: A float tensor of size [batch, num_classes].
-      logits: A float tensor of size [batch, num_classes].
-      alpha: A float tensor of size [batch_size]
-        specifying per-example weight for balanced cross entropy.
-      gamma: A float scalar modulating loss from hard and easy examples.
+	Args:
+	  labels: A float tensor of size [batch, num_classes].
+	  logits: A float tensor of size [batch, num_classes].
+	  alpha: A float tensor of size [batch_size]
+		specifying per-example weight for balanced cross entropy.
+	  gamma: A float scalar modulating loss from hard and easy examples.
 
-    Returns:
-      focal_loss: A float32 scalar representing normalized total loss.
-    """    
-    BCLoss = F.binary_cross_entropy_with_logits(input = logits, target = labels,reduction = "none")
+	Returns:
+	  focal_loss: A float32 scalar representing normalized total loss.
+	"""    
+	BCLoss = F.binary_cross_entropy_with_logits(input = logits, target = labels,reduction = "none")
 
-    if gamma == 0.0:
-        modulator = 1.0
-    else:
-        modulator = torch.exp(-gamma * labels * logits - gamma * torch.log(1 + 
-            torch.exp(-1.0 * logits)))
+	if gamma == 0.0:
+		modulator = 1.0
+	else:
+		modulator = torch.exp(-gamma * labels * logits - gamma * torch.log(1 + 
+			torch.exp(-1.0 * logits)))
 
-    loss = modulator * BCLoss
+	loss = modulator * BCLoss
 
-    weighted_loss = alpha * loss
-    focal_loss = torch.sum(weighted_loss)
+	weighted_loss = alpha * loss
+	focal_loss = torch.sum(weighted_loss)
 
-    focal_loss /= torch.sum(labels)
-    return focal_loss
+	focal_loss /= torch.sum(labels)
+	return focal_loss
 
 
 
 def CB_loss(labels, logits, samples_per_cls, no_of_classes, loss_type, beta, gamma):
-    """Compute the Class Balanced Loss between `logits` and the ground truth `labels`.
+	"""Compute the Class Balanced Loss between `logits` and the ground truth `labels`.
 
-    Class Balanced Loss: ((1-beta)/(1-beta^n))*Loss(labels, logits)
-    where Loss is one of the standard losses used for Neural Networks.
+	Class Balanced Loss: ((1-beta)/(1-beta^n))*Loss(labels, logits)
+	where Loss is one of the standard losses used for Neural Networks.
 
-    Args:
-      labels: A int tensor of size [batch].
-      logits: A float tensor of size [batch, no_of_classes].
-      samples_per_cls: A python list of size [no_of_classes].
-      no_of_classes: total number of classes. int
-      loss_type: string. One of "sigmoid", "focal", "softmax".
-      beta: float. Hyperparameter for Class balanced loss.
-      gamma: float. Hyperparameter for Focal loss.
+	Args:
+	  labels: A int tensor of size [batch].
+	  logits: A float tensor of size [batch, no_of_classes].
+	  samples_per_cls: A python list of size [no_of_classes].
+	  no_of_classes: total number of classes. int
+	  loss_type: string. One of "sigmoid", "focal", "softmax".
+	  beta: float. Hyperparameter for Class balanced loss.
+	  gamma: float. Hyperparameter for Focal loss.
 
-    Returns:
-      cb_loss: A float tensor representing class balanced loss
-    """
-    assert labels.get_device() == logits.get_device()
-    device = labels.get_device()
-    device = torch.device("cuda:" + str(device)) if device >= 0 else torch.device("cpu")
+	Returns:
+	  cb_loss: A float tensor representing class balanced loss
+	"""
+	assert labels.get_device() == logits.get_device()
+	device = labels.get_device()
+	device = torch.device("cuda:" + str(device)) if device >= 0 else torch.device("cpu")
 
-    effective_num = 1.0 - np.power(beta, samples_per_cls)
-    weights = (1.0 - beta) / np.array(effective_num)
-    weights = weights / np.sum(weights) * no_of_classes
+	effective_num = 1.0 - np.power(beta, samples_per_cls)
+	weights = (1.0 - beta) / np.array(effective_num)
+	weights = weights / np.sum(weights) * no_of_classes
 
-    labels_one_hot = F.one_hot(labels, no_of_classes).float()
-    
-    weights = torch.tensor(weights).float().to(device)
-    weights = weights.unsqueeze(0)
-    weights = weights.repeat(labels_one_hot.shape[0], 1) * labels_one_hot
-    weights = weights.sum(1)
-    weights = weights.unsqueeze(1)
-    weights = weights.repeat(1,no_of_classes)
+	labels_one_hot = F.one_hot(labels, no_of_classes).float()
+	
+	weights = torch.tensor(weights).float().to(device)
+	weights = weights.unsqueeze(0)
+	weights = weights.repeat(labels_one_hot.shape[0], 1) * labels_one_hot
+	weights = weights.sum(1)
+	weights = weights.unsqueeze(1)
+	weights = weights.repeat(1,no_of_classes)
 
-    if loss_type == "focal":
-        cb_loss = focal_loss(labels_one_hot, logits, weights, gamma)
-    elif loss_type == "sigmoid":
-        cb_loss = F.binary_cross_entropy_with_logits(input=logits, target=labels_one_hot, weights=weights)
-    elif loss_type == "softmax":
-        pred = logits.softmax(dim=1)
-        cb_loss = F.binary_cross_entropy(input=pred, target=labels_one_hot, weights=weights)
-    return cb_loss
+	if loss_type == "focal":
+		cb_loss = focal_loss(labels_one_hot, logits, weights, gamma)
+	elif loss_type == "sigmoid":
+		cb_loss = F.binary_cross_entropy_with_logits(input=logits, target=labels_one_hot, weights=weights)
+	elif loss_type == "softmax":
+		pred = logits.softmax(dim=1)
+		cb_loss = F.binary_cross_entropy(input=pred, target=labels_one_hot, weights=weights)
+	return cb_loss

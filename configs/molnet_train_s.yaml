@@ -3,10 +3,10 @@ dataset: 'chirality'
 
 paths: 
   train_data: './data/ChirBase/chirbase_clean_etkdg.sdf' 
-  train_data_enantiomer: './data/ChirBase/chirbase_clean_enatiomers_etkdg.sdf'
+  # train_data_enantiomer: './data/ChirBase/chirbase_clean_enatiomers_etkdg.sdf'
   valid_data: './data/ChirBase/chirbase_clean_etkdg.sdf'
   all_data: './data/ChirBase/chirbase_clean_etkdg.sdf' # for k-fold
-  all_data_enantiomer: './data/ChirBase/chirbase_clean_enatiomers_etkdg.sdf' # for k-fold
+  # all_data_enantiomer: './data/ChirBase/chirbase_clean_enatiomers_etkdg.sdf' # for k-fold
   test_data: './data/CMRT/cmrt_clean_etkdg.sdf' # for inference
 
 model_para: 
@@ -24,7 +24,7 @@ model_para:
 train_para:
   batch_size: 128
   accum_iter: 1
-  epochs: 200
+  epochs: 100
   lr: 0.0001
   num_workers: 0
   weight_decay: 0.01

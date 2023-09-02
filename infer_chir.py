@@ -30,16 +30,18 @@ from models.dgcnn import DGCNN
 from models.molnet import MolNet 
 from models.pointnet import PointNet
 from models.schnet import SchNet
+from utils import set_seed, average_results_on_enantiomers
 
 TEST_BATCH_SIZE = 1 # global variable in inference
 
 def inference(model, device, loader, num_points, out_cls, csp_num): 
 	model.eval()
 	y_pred = []
-	names = []
+	smiles_list = []
+	id_list = []
 	mbs = []
-	for _, batch in enumerate(tqdm(loader, desc="Iteration")):
-		name, mb, x, mask = batch
+	for _, batch in enumerate(tqdm(loader, desc="Iteration")): 
+		mol_id, smiles_iso, mb, x, mask = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
@@ -50,11 +52,12 @@ def inference(model, device, loader, num_points, out_cls, csp_num):
 			pred = model(x, None, idx_base)
 
 		y_pred.append(pred.view(TEST_BATCH_SIZE, -1).detach().cpu())
-		names.extend(name)
+		smiles_list.extend(smiles_iso)
+		id_list.extend(mol_id)
 		mbs.extend(mb.tolist())
 
 	y_pred = torch.cat(y_pred, dim=0)
-	return names, mbs, y_pred
+	return id_list, smiles_list, mbs, y_pred
 
 def batch_filter(supp): 
 	for mol in supp: # remove empty molecule
@@ -86,9 +89,7 @@ if __name__ == "__main__":
 	args = parser.parse_args()
 	args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-	np.random.seed(42)
-	torch.manual_seed(42)
-	torch.cuda.manual_seed(42)
+	set_seed(42)
 
 	results_dir = "/".join(args.result_path.split('/')[:-1])
 	os.makedirs(results_dir, exist_ok = True)
@@ -118,7 +119,13 @@ if __name__ == "__main__":
 	test_set = ChiralityDataset_infer([item for item in batch_filter(supp)], 
 										num_points=config['model_para']['num_atoms'], 
 										csp_no=args.csp_no, 
-										data_augmentation=False)
+										flipping=False)
+	supp_ena = Chem.SDMolSupplier(config['paths']['test_data'])
+	test_set_ena = ChiralityDataset_infer([item for item in batch_filter(supp_ena)], 
+										num_points=config['model_para']['num_atoms'], 
+										csp_no=args.csp_no, 
+										flipping=True)
+	test_set = ConcatDataset([test_set, test_set_ena]) # concat two configurations' datasets
 	test_loader = DataLoader(test_set,
 								batch_size=TEST_BATCH_SIZE, 
 								num_workers=config['train_para']['num_workers'],
@@ -130,14 +137,16 @@ if __name__ == "__main__":
 	model.to(device) 
 
 	print('Evaluating...')
-	names, mbs, y_pred = inference(model, device, test_loader, 
-											config['model_para']['num_atoms'], 
-											config['model_para']['out_channels'],
-											config['model_para']['csp_num'])
+	id_list, smiles_list, mbs, y_pred = inference(model, device, test_loader, 
+													config['model_para']['num_atoms'], 
+													config['model_para']['out_channels'],
+													config['model_para']['csp_num'])
 	y_pred_out = []
 	for y in y_pred:
 		y_pred_out.append(','.join([str(i) for i in y.tolist()]))
 
-	res_df = pd.DataFrame({'SMILES': names, 'MB': mbs, 'Pred': y_pred_out})
+	res_df = pd.DataFrame({'ID': id_list, 'SMILES': smiles_list, 'MB': mbs, 'Pred': y_pred_out})
+	print('Average the results of enantiomers...')
+	res_df = average_results_on_enantiomers(res_df)
 	res_df.to_csv(args.result_path, sep='\t')
 	print('Save the test results to {}'.format(args.result_path))

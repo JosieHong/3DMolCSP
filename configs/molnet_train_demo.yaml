@@ -2,10 +2,10 @@ model: 'molnet'
 dataset: 'chirality'
 
 paths: 
-  # train_data: './data/ChirBase/chirbase_minus_cmrt_clean_etkdg.sdf'
-  # valid_data: './data/ChirBase/chirbase_minus_cmrt_clean_etkdg.sdf'
-  all_data: './data/ChirBase/chirbase_clean4_enatiomers_etkdg.sdf' # for k-fold
-  # test_data: './data/ChirBase/cmrt_clean_etkdg.sdf' # for infer
+  train_data: './data/ChirBase/chirobiotic_v_etkdg_train.sdf' 
+  valid_data: './data/ChirBase/chirobiotic_v_etkdg_test.sdf'
+  all_data: './data/ChirBase/chirobiotic_v_etkdg.sdf'  # for k-fold
+  test_data: './data/CMRT/cmrt_clean_etkdg.sdf' # for inference
 
 model_para: 
   in_channels: 21
@@ -22,10 +22,10 @@ model_para:
 train_para:
   batch_size: 128
   accum_iter: 1
-  epochs: 0
-  lr: 0.00001
+  epochs: 200
+  lr: 0.0001
   num_workers: 0
   weight_decay: 0.01
   scheduler: 
-    milestones: [20, 40, 80]
+    milestones: [10, 20, 40]
     gamma: 0.5

@@ -31,6 +31,7 @@ from models.dgcnn import DGCNN
 from models.molnet import MolNet 
 from models.pointnet import PointNet
 from models.schnet import SchNet
+from utils import set_seed, average_results_on_enantiomers
 
 TEST_BATCH_SIZE = 1 # global variable in validation
 
@@ -55,7 +56,7 @@ def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, 
 	y_true = []
 	y_pred = []
 	for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
-		_, _, x, mask, y = batch
+		_, _, _, x, mask, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
@@ -94,10 +95,11 @@ def eval(model, device, loader, batch_size, num_points, out_cls, csp_num):
 	model.eval()
 	y_true = []
 	y_pred = []
-	names = []
+	smiles_list = []
+	id_list = []
 	mbs = []
-	for _, batch in enumerate(tqdm(loader, desc="Iteration")):
-		name, mb, x, mask, y = batch
+	for _, batch in enumerate(tqdm(loader, desc="Iteration")): 
+		mol_id, smiles_iso, mb, x, mask, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
@@ -115,12 +117,13 @@ def eval(model, device, loader, batch_size, num_points, out_cls, csp_num):
 			invalid_pred = invalid_y
 		y_true.append(y[~invalid_y].detach().cpu())
 		y_pred.append(pred[~invalid_pred].view(y.size(0), -1).detach().cpu())
-		names.extend(name)
+		smiles_list.extend(smiles_iso)
+		id_list.extend(mol_id)
 		mbs.extend(mb.tolist())
 
 	y_true = torch.cat(y_true, dim=0) 
 	y_pred = torch.cat(y_pred, dim=0)
-	return names, mbs, y_true, y_pred
+	return id_list, smiles_list, mbs, y_true, y_pred
 
 def batch_filter(supp): 
 	for mol in supp: # remove empty molecule
@@ -191,9 +194,7 @@ if __name__ == "__main__":
 	args = parser.parse_args()
 	args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-	np.random.seed(42)
-	torch.manual_seed(42)
-	torch.cuda.manual_seed(42)
+	set_seed(42)
 
 	# load the configuration file
 	with open(args.config, 'r') as f:
@@ -231,13 +232,13 @@ if __name__ == "__main__":
 								num_points=config['model_para']['num_atoms'], 
 								num_csp=config['model_para']['csp_num'], 
 								csp_no=args.csp_no, 
-								data_augmentation=False)
-	supp_ena = Chem.SDMolSupplier(config['paths']['all_data_enantiomer'])
+								flipping=False)
+	supp_ena = Chem.SDMolSupplier(config['paths']['all_data'])
 	dataset_ena = ChiralityDataset([item for item in batch_filter(supp_ena)], 
 								num_points=config['model_para']['num_atoms'], 
 								num_csp=config['model_para']['csp_num'], 
 								csp_no=args.csp_no, 
-								data_augmentation=False)
+								flipping=True)
 	print('Load {} data from {}.'.format(len(dataset), config['paths']['all_data']))
 	# split the indices into k-fold
 	each_chunk = len(dataset) // args.k_fold
@@ -265,7 +266,7 @@ if __name__ == "__main__":
 		best_valid_auc = 0
 		best_valid_acc = 0
 		
-		# josie: modify the path to check_point
+		# modify the path to check_point
 		if args.checkpoint != '':
 			check_point_fold = args.checkpoint.replace('.pt', '_{}.pt'.format(fold_i))
 			print('Modify the path to checkpoint as: {}'.format(check_point_fold))
@@ -322,11 +323,11 @@ if __name__ == "__main__":
 			train_acc = accuracy_score(y_true, y_pred)
 
 			print('Evaluating...')
-			names, mbs, y_true, y_pred = eval(model, device, valid_loader, 
-												config['train_para']['batch_size'], 
-												config['model_para']['num_atoms'], 
-												config['model_para']['out_channels'],
-												config['model_para']['csp_num'])
+			id_list, smiles_list, mbs, y_true, y_pred = eval(model, device, valid_loader, 
+															config['train_para']['batch_size'], 
+															config['model_para']['num_atoms'], 
+															config['model_para']['out_channels'],
+															config['model_para']['csp_num'])
 			try: 
 				valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
 				# valid_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovr',)
@@ -381,17 +382,19 @@ if __name__ == "__main__":
 			best_valid_auc = torch.load(check_point_fold, map_location=device)['best_val_auc']
 
 			print('Evaluating...')
-			names, mbs, y_true, y_pred = eval(model, device, valid_loader, 
-												config['train_para']['batch_size'], 
-												config['model_para']['num_atoms'], 
-												config['model_para']['out_channels'],
-												config['model_para']['csp_num'])
+			id_list, smiles_list, mbs, y_true, y_pred = eval(model, device, valid_loader, 
+															config['train_para']['batch_size'], 
+															config['model_para']['num_atoms'], 
+															config['model_para']['out_channels'],
+															config['model_para']['csp_num'])
 			# y_pred = torch.argmax(y_pred, dim=1) # we need to output the probabilities
 			y_pred_out = []
 			for y in y_pred:
 				y_pred_out.append(','.join([str(i) for i in y.tolist()]))
 
-			res_df = pd.DataFrame({'SMILES': names, 'MB': mbs, 'Class': y_true, 'Pred': y_pred_out})
+			res_df = pd.DataFrame({'ID': id_list, 'SMILES': smiles_list, 'MB': mbs, 'Class': y_true, 'Pred': y_pred_out})
+			print('Average the results of enantiomers...')
+			res_df = average_results_on_enantiomers(res_df)
 			res_df.to_csv(result_path_fold, sep='\t')
 			print('Save the test results to {}'.format(result_path_fold))
 
@@ -399,4 +402,6 @@ if __name__ == "__main__":
 	for i, (acc, auc) in enumerate(zip(records['best_acc'], records['best_auc'])):
 		print('fold_{}: acc: {}, auc: {}'.format(i, acc, auc))
 	print('mean acc: {}, mean auc: {}'.format(sum(records['best_acc'])/len(records['best_acc']), sum(records['best_auc'])/len(records['best_auc'])))
+	print('(Note that these are not the final results because they are not averaged on enantiomers. \
+Please calculate the metrics again by average the results of enantiomers, which can be found in `./vis/`. )')
 

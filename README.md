@@ -19,11 +19,20 @@ conda install -c conda-forge tensorboard
 pip install lxml tqdm pandas pyteomics PyYAML scikit-learn
 ```
 
-## Experiments
+## Data preprocessing
 
-### Five-fold cross-validation on ChirBase
+### Demo set (Chirobiotic V)
 
-1. Preprocess ChirBase
+```bash
+# The demo dataset is already cleaned. 
+# generate 3D conformations
+python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirobiotic_v.sdf --conf_type etkdg
+
+# (optional)
+python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirobiotic_v_etkdg.sdf --output_train ./data/ChirBase/chirobiotic_v_etkdg_train.sdf --output_test ./data/ChirBase/chirobiotic_v_etkdg_test.sdf
+```
+
+### ChirBase
 
 ```bash
 # preprocessing
@@ -32,53 +41,22 @@ python ./preprocess/preprocess_chirbase.py \
 --output ./data/ChirBase/chirbase_clean.sdf \
 --csp_setting ./preprocess/chirality_stationary_phase_list.csv
 
-# preprocess results: 
-# ~~1. no duplicated (76795)~~
-# ~~2. duplicated the isomer SMILES (43967)~~
-# ~~3. duplicated the non-isomer SMILES (43700)~~
-# ~~4. duplicated the isomer SMILES with the same chiral atom (43785)~~
-
 # generate enantiomers
-python ./preprocess/convert_enantiomers.py --input ./data/ChirBase/chirbase_clean.sdf --output ./data/ChirBase/chirbase_clean_enatiomers.sdf
+# python ./preprocess/convert_enantiomers.py --input ./data/ChirBase/chirbase_clean.sdf --output ./data/ChirBase/chirbase_clean_enatiomers.sdf
 
 # generate 3D conformations
 python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type etkdg
-nohup python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean_enatiomers.sdf --conf_type etkdg > nohup_enan.out
+# python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean_enatiomers.sdf --conf_type etkdg
 
-# (option) OMEGA conformations are available
+# (optional) OMEGA conformations are available
 python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type omega
 
-# (option) randomly split training and validation set for section 3
-python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean4_etkdg.sdf --output_train ./data/ChirBase/chirbase_clean4_etkdg_train.sdf --output_test ./data/ChirBase/chirbase_clean4_etkdg_test.sdf
+# (optional) randomly split training and validation set for section 3
+python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean_etkdg.sdf --output_train ./data/ChirBase/chirbase_clean_etkdg_train.sdf --output_test ./data/ChirBase/chirbase_clean_etkdg_test.sdf
 python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean_omega.sdf --output_train ./data/ChirBase/chirbase_clean_omega_train.sdf --output_test ./data/ChirBase/chirbase_clean_omega_test.sdf
 ```
 
-2. Five-fold cross-validation
-
-```bash
-# training from scratch
-nohup bash ./experiments/train_chir_etkdg_5fold.sh > molnet_chir_etkdg_5fold.out 
-nohup bash ./experiments/train_chir_etkdg_5fold_p1.sh > molnet_chir_etkdg_5fold_p1.out 
-nohup bash ./experiments/train_chir_etkdg_5fold_p2.sh > molnet_chir_etkdg_5fold_p2.out 
-
-# traning from pre-trained model
-nohup bash ./experiments/train_chir_etkdg_5fold_tl.sh > molnet_chir_etkdg_5fold_tl.out 
-nohup bash ./experiments/train_chir_etkdg_5fold_tl_p1.sh > molnet_chir_etkdg_5fold_tl_p1.out 
-nohup bash ./experiments/train_chir_etkdg_5fold_tl_p2.sh > molnet_chir_etkdg_5fold_tl_p2.out 
-```
-
-### Training on ChirBase and testing on CMRT
-
-1. Training (using all data)
-
-```bash
-# traning from pre-trained model
-nohup bash ./experiments/train_chir_etkdg_tl.sh > molnet_chir_etkdg_tl.out 
-nohup bash ./experiments/train_chir_etkdg_tl_p1.sh > molnet_chir_etkdg_tl_p1_0804.out 
-nohup bash ./experiments/train_chir_etkdg_tl_p2.sh > molnet_chir_etkdg_tl_p2_0804.out 
-```
-
-2. Preprocess CMRT
+### CMRT
 
 ```bash
 # preprocessing
@@ -94,6 +72,63 @@ python ./preprocess/convert_enantiomers.py --input ./data/CMRT/cmrt_clean.sdf --
 python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean.sdf --conf_type etkdg
 python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean_enatiomers.sdf --conf_type etkdg
 ```
+
+## Experiments
+
+### Exp1: Demo
+
+1. Preprocess demo dataset
+
+2. Five-fold cross-validation
+
+```bash
+# training from scratch
+python main_chir_kfold.py --config ./configs/molnet_train_demo.yaml --k_fold 5 --csp_no 3 \
+                                    --log_dir ./logs/molnet_chirality/ \
+                                    --checkpoint ./check_point/demo_sc.pt \
+                                    --result_path ./results/demo_sc.csv \
+                                    --device 1
+
+# training from pretrained model 
+python main_chir_kfold.py --config ./configs/molnet_train_demo.yaml --k_fold 5 --csp_no 3 \
+                                    --log_dir ./logs/molnet_chirality/ \
+                                    --resume_path ./check_point/molnet_agilent.pt \
+                                    --transfer \
+                                    --checkpoint ./check_point/demo_tl.pt \
+                                    --result_path ./results/demo_tl.csv \
+                                    --device 1
+```
+
+### Exp2: Five-fold cross-validation on ChirBase
+
+1. Preprocess ChirBase
+
+2. Five-fold cross-validation
+
+```bash
+# training from scratch
+nohup bash ./experiments/train_chir_etkdg_5fold.sh > molnet_chir_etkdg_5fold.out 
+nohup bash ./experiments/train_chir_etkdg_5fold_p1.sh > molnet_chir_etkdg_5fold_p1.out 
+nohup bash ./experiments/train_chir_etkdg_5fold_p2.sh > molnet_chir_etkdg_5fold_p2.out 
+
+# traning from pre-trained model
+nohup bash ./experiments/train_chir_etkdg_5fold_tl.sh > molnet_chir_etkdg_5fold_tl.out 
+nohup bash ./experiments/train_chir_etkdg_5fold_tl_p1.sh > molnet_chir_etkdg_5fold_tl_p1.out 
+nohup bash ./experiments/train_chir_etkdg_5fold_tl_p2.sh > molnet_chir_etkdg_5fold_tl_p2.out 
+```
+
+### Exp3: Training on ChirBase and testing on CMRT
+
+1. Training (using all data)
+
+```bash
+# traning from pre-trained model
+nohup bash ./experiments/train_chir_etkdg_tl.sh > molnet_chir_etkdg_tl.out 
+nohup bash ./experiments/train_chir_etkdg_tl_p1.sh > molnet_chir_etkdg_tl_p1_0804.out 
+nohup bash ./experiments/train_chir_etkdg_tl_p2.sh > molnet_chir_etkdg_tl_p2_0804.out 
+```
+
+2. Preprocess CMRT
 
 3. infer on CMRT
 

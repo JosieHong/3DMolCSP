@@ -29,7 +29,7 @@ from models.dgcnn import DGCNN
 from models.molnet import MolNet 
 from models.pointnet import PointNet
 from models.schnet import SchNet
-from utils import CB_loss
+from utils import set_seed, CB_loss
 
 
 def cls_criterion(outputs, targets, no_of_classes=0, samples_per_cls=None): 
@@ -38,12 +38,6 @@ def cls_criterion(outputs, targets, no_of_classes=0, samples_per_cls=None):
 	loss = nn.CrossEntropyLoss()(outputs, targets.to(torch.int64))
 	return loss
 
-	# Class-Balanced Focal Loss
-	# cb_loss = CB_loss(targets.to(torch.int64), outputs, 
-	# 				samples_per_cls, no_of_classes, 
-	# 				loss_type="focal", beta=0.9999, gamma=2.)
-	# return cb_loss
-
 def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, out_cls, csp_num, samples_per_cls): 
 	'''
 	csp_num may be removed later
@@ -51,7 +45,7 @@ def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, 
 	y_true = []
 	y_pred = []
 	for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
-		_, _, x, mask, y = batch
+		_, _, _, x, mask, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
@@ -90,10 +84,11 @@ def eval(model, device, loader, batch_size, num_points, out_cls, csp_num):
 	model.eval()
 	y_true = []
 	y_pred = []
-	names = []
+	smiles_list = []
+	id_list = []
 	mbs = []
 	for _, batch in enumerate(tqdm(loader, desc="Iteration")):
-		name, mb, x, mask, y = batch
+		mol_id, smiles_iso, mb, x, mask, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
@@ -111,12 +106,13 @@ def eval(model, device, loader, batch_size, num_points, out_cls, csp_num):
 			invalid_pred = invalid_y
 		y_true.append(y[~invalid_y].detach().cpu())
 		y_pred.append(pred[~invalid_pred].view(y.size(0), -1).detach().cpu())
-		names.extend(name)
+		smiles_list.extend(smiles_iso)
+		id_list.extend(mol_id)
 		mbs.extend(mb.tolist())
 
 	y_true = torch.cat(y_true, dim=0) 
 	y_pred = torch.cat(y_pred, dim=0)
-	return names, mbs, y_true, y_pred
+	return id_list, smiles_list, mbs, y_true, y_pred
 
 def batch_filter(supp): 
 	for mol in supp: # remove empty molecule
@@ -152,9 +148,7 @@ if __name__ == "__main__":
 	args = parser.parse_args()
 	args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-	np.random.seed(42)
-	torch.manual_seed(42)
-	torch.cuda.manual_seed(42)
+	set_seed(42)
 
 	# load the configuration file
 	with open(args.config, 'r') as f:
@@ -181,13 +175,13 @@ if __name__ == "__main__":
 								num_points=config['model_para']['num_atoms'], 
 								num_csp=config['model_para']['csp_num'], 
 								csp_no=args.csp_no, 
-								data_augmentation=False)
-	supp_ena = Chem.SDMolSupplier(config['paths']['train_data_enantiomer'])
+								flipping=False)
+	supp_ena = Chem.SDMolSupplier(config['paths']['train_data'])
 	train_set_ena = ChiralityDataset([item for item in batch_filter(supp_ena)], 
 								num_points=config['model_para']['num_atoms'], 
 								num_csp=config['model_para']['csp_num'], 
 								csp_no=args.csp_no, 
-								data_augmentation=False)
+								flipping=True)
 
 	# 1. Re-sampling
 	train_indices = train_set.balance_indices(list(range(len(train_set)))) # use this line to make balance sampling
@@ -197,10 +191,10 @@ if __name__ == "__main__":
 
 	train_set = ConcatDataset([train_set, train_set_ena]) # concat two configurations' datasets
 	train_loader = DataLoader(train_set,
-	                            batch_size=config['train_para']['batch_size'],
-	                            num_workers=config['train_para']['num_workers'],
-	                            drop_last=True,
-	                            sampler=train_sampler)
+								batch_size=config['train_para']['batch_size'],
+								num_workers=config['train_para']['num_workers'],
+								drop_last=True,
+								sampler=train_sampler)
 	samples_per_cls = None
 	print('Load {} balanced training data from {}.'.format(len(train_loader.dataset), config['paths']['train_data']))
 	# 2. Covering and efficient sample size
@@ -216,7 +210,14 @@ if __name__ == "__main__":
 								num_points=config['model_para']['num_atoms'], 
 								num_csp=config['model_para']['csp_num'], 
 								csp_no=args.csp_no, 
-								data_augmentation=False)
+								flipping=False)
+	supp_ena = Chem.SDMolSupplier(config['paths']['valid_data'])
+	valid_set_ena = ChiralityDataset([item for item in batch_filter(supp_ena)], 
+								num_points=config['model_para']['num_atoms'], 
+								num_csp=config['model_para']['csp_num'], 
+								csp_no=args.csp_no, 
+								flipping=True)
+	valid_set = ConcatDataset([valid_set, valid_set_ena]) # concat two configurations' datasets
 	valid_loader = DataLoader(valid_set,
 								batch_size=2, 
 								num_workers=config['train_para']['num_workers'],
@@ -276,11 +277,11 @@ if __name__ == "__main__":
 		train_acc = accuracy_score(y_true, y_pred)
 
 		print('Evaluating...')
-		names, mbs, y_true, y_pred = eval(model, device, valid_loader, 
-											config['train_para']['batch_size'], 
-											config['model_para']['num_atoms'], 
-											config['model_para']['out_channels'],
-											config['model_para']['csp_num'])
+		id_list, smiles_list, mbs, y_true, y_pred = eval(model, device, valid_loader, 
+														config['train_para']['batch_size'], 
+														config['model_para']['num_atoms'], 
+														config['model_para']['out_channels'],
+														config['model_para']['csp_num'])
 		try: 
 			valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
 			# valid_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovr',)
