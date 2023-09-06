@@ -24,21 +24,16 @@ from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
 from sklearn.metrics import roc_auc_score, accuracy_score
 
-from datasets.dataset_cls import ChiralityDataset
+from dataset import ChiralityDataset
 from models.dgcnn import DGCNN
 from models.molnet import MolNet 
 from models.pointnet import PointNet
 from models.schnet import SchNet
-from utils import set_seed, CB_loss
+from utils import set_seed, cls_criterion
 
 
-def cls_criterion(outputs, targets, no_of_classes=0, samples_per_cls=None): 
-	# Cross Entropy Loss
-	targets = torch.squeeze(targets)
-	loss = nn.CrossEntropyLoss()(outputs, targets.to(torch.int64))
-	return loss
 
-def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, out_cls, csp_num, samples_per_cls): 
+def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, out_cls, csp_num): 
 	'''
 	csp_num may be removed later
 	'''
@@ -61,7 +56,7 @@ def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, 
 			invalid_pred = invalid_y.unsqueeze(2).repeat(1, 1, out_cls)
 		else:
 			invalid_pred = invalid_y
-		loss = cls_criterion(pred[~invalid_pred].view(y.size(0), -1), y[~invalid_y], out_cls, samples_per_cls)
+		loss = cls_criterion(pred[~invalid_pred].view(y.size(0), -1), y[~invalid_y])
 		# normalize loss to account for batch accumulation
 		loss = loss / accum_iter 
 		loss.backward()
@@ -183,7 +178,6 @@ if __name__ == "__main__":
 								csp_no=args.csp_no, 
 								flipping=True)
 
-	# 1. Re-sampling
 	train_indices = train_set.balance_indices(list(range(len(train_set)))) # use this line to make balance sampling
 
 	train_indices += [i+len(train_set) for i in train_indices] # add enantiomers (use the same indexes for two configurations prohibit data leaking)
@@ -195,15 +189,6 @@ if __name__ == "__main__":
 								num_workers=config['train_para']['num_workers'],
 								drop_last=True,
 								sampler=train_sampler)
-	samples_per_cls = None
-	print('Load {} balanced training data from {}.'.format(len(train_loader.dataset), config['paths']['train_data']))
-	# 2. Covering and efficient sample size
-	# train_loader = DataLoader(train_set,
-	# 							batch_size=config['train_para']['batch_size'],
-	# 							num_workers=config['train_para']['num_workers'],
-	# 							drop_last=True)
-	# samples_per_cls = train_set.count_cls(config['model_para']['out_channels'], list(range(len(train_set))))
-	# print('Load {} training data from {}. \nThe sample numbers of each classes are {}'.format(len(train_set), config['paths']['train_data'], samples_per_cls))
 
 	supp = Chem.SDMolSupplier(config['paths']['valid_data'])
 	valid_set = ChiralityDataset([item for item in batch_filter(supp)], 
@@ -269,10 +254,8 @@ if __name__ == "__main__":
 								config['train_para']['batch_size'], 
 								config['model_para']['num_atoms'], 
 								config['model_para']['out_channels'], 
-								config['model_para']['csp_num'], 
-								samples_per_cls)
+								config['model_para']['csp_num'])
 		train_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
-		# train_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovr',)
 		y_pred = torch.argmax(y_pred, dim=1)
 		train_acc = accuracy_score(y_true, y_pred)
 
@@ -284,7 +267,6 @@ if __name__ == "__main__":
 														config['model_para']['csp_num'])
 		try: 
 			valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
-			# valid_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovr',)
 		except: 
 			valid_auc = np.nan
 		

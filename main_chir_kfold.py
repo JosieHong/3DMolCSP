@@ -26,31 +26,16 @@ from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
 from sklearn.metrics import roc_auc_score, accuracy_score
 
-from datasets.dataset_cls import ChiralityDataset
+from dataset import ChiralityDataset
 from models.dgcnn import DGCNN
 from models.molnet import MolNet 
 from models.pointnet import PointNet
 from models.schnet import SchNet
-from utils import set_seed, average_results_on_enantiomers
+from utils import set_seed, average_results_on_enantiomers, cls_criterion
 
 TEST_BATCH_SIZE = 1 # global variable in validation
 
-def cal_roc_auc_score(y_true, y_pred, multi_class='ovr'): 
-	y_true = y_true.reshape(-1, 1)
-	enc = OneHotEncoder(categories=[[i for i in range(y_pred.shape[1])]])
-	y_true = enc.fit_transform(y_true).toarray()
-	# print('y_true', y_true.shape, 'y_pred', y_pred.shape)
-	score = roc_auc_score(y_true, y_pred, multi_class=multi_class)
-	return score1
 
-def cls_criterion(outputs, targets): 
-	# print('outputs', outputs.size(), 'targets', targets.size())
-	targets = torch.squeeze(targets)
-	
-	# print('outputs', outputs.size(), 'targets', targets.size())
-	# print(outputs[0, :], targets[0])
-	loss = nn.CrossEntropyLoss()(outputs, targets.to(torch.int64))
-	return loss
 
 def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, out_cls, csp_num):
 	y_true = []
@@ -142,7 +127,7 @@ def load_data_fold(dataset, dataset_ena, split_indices, fold_i, num_workers, bat
 		else:
 			valid_indices += indices
 	
-	train_indices = dataset.balance_indices(train_indices) # j0sie: please use this line to make balance sampling
+	train_indices = dataset.balance_indices(train_indices) # make balance sampling
 	print('# train: {}, # valid: {}'.format(len(train_indices), len(valid_indices)))
 
 	train_indices += [i+len(dataset) for i in train_indices] # add enantiomers (use the same indexes for two configurations prohibit data leaking)
@@ -215,15 +200,7 @@ if __name__ == "__main__":
 	# print(f'{str(model)} #Params: {num_params}')
 	print('#Params: {}'.format(num_params))
 
-	# freezing the encode model
-	# for name, param in model.named_parameters():
-	#     if name.split('.')[0] in ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'conv6', 'conv']: # encode parts
-	#         param.requires_grad = False
-
-	# freezing the trnet
-	# for name, param in model.named_parameters():
-	#     if name.split('.')[0] == 'tr_net': # TRNet
-	#         param.requires_grad = False
+	
 
 	# --------------- K-Fold Validation --------------- # 
 	print("Loading the data...") 
@@ -318,7 +295,6 @@ if __name__ == "__main__":
 									config['model_para']['out_channels'], 
 									config['model_para']['csp_num'])
 			train_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
-			# train_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovr',)
 			y_pred = torch.argmax(y_pred, dim=1)
 			train_acc = accuracy_score(y_true, y_pred)
 
@@ -330,7 +306,6 @@ if __name__ == "__main__":
 															config['model_para']['csp_num'])
 			try: 
 				valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
-				# valid_auc = cal_roc_auc_score(np.array(y_true), np.array(y_pred), multi_class='ovr',)
 			except: 
 				valid_auc = np.nan
 			
@@ -345,8 +320,6 @@ if __name__ == "__main__":
 
 			if (not np.isnan(valid_auc) and valid_auc > best_valid_auc) or \
 				(np.isnan(valid_auc) and valid_acc >= best_valid_acc): 
-			# if valid_acc > best_valid_acc: 
-			# if valid_acc >= best_valid_acc and valid_auc >= best_valid_auc: 
 				best_valid_acc = valid_acc
 				best_valid_auc = valid_auc
 				if args.checkpoint != '':
@@ -387,7 +360,6 @@ if __name__ == "__main__":
 															config['model_para']['num_atoms'], 
 															config['model_para']['out_channels'],
 															config['model_para']['csp_num'])
-			# y_pred = torch.argmax(y_pred, dim=1) # we need to output the probabilities
 			y_pred_out = []
 			for y in y_pred:
 				y_pred_out.append(','.join([str(i) for i in y.tolist()]))

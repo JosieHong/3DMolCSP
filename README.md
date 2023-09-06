@@ -1,4 +1,6 @@
-# 3DMolChir
+# 3DMolCSP
+
+
 
 ## Set up
 
@@ -41,17 +43,13 @@ python ./preprocess/preprocess_chirbase.py \
 --output ./data/ChirBase/chirbase_clean.sdf \
 --csp_setting ./preprocess/chirality_stationary_phase_list.csv
 
-# generate enantiomers
-# python ./preprocess/convert_enantiomers.py --input ./data/ChirBase/chirbase_clean.sdf --output ./data/ChirBase/chirbase_clean_enatiomers.sdf
-
 # generate 3D conformations
 python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type etkdg
-# python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean_enatiomers.sdf --conf_type etkdg
 
 # (optional) OMEGA conformations are available
 python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type omega
 
-# (optional) randomly split training and validation set for section 3
+# (optional) randomly split training and validation set for Exp3
 python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean_etkdg.sdf --output_train ./data/ChirBase/chirbase_clean_etkdg_train.sdf --output_test ./data/ChirBase/chirbase_clean_etkdg_test.sdf
 python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean_omega.sdf --output_train ./data/ChirBase/chirbase_clean_omega_train.sdf --output_test ./data/ChirBase/chirbase_clean_omega_test.sdf
 ```
@@ -65,12 +63,8 @@ python ./preprocess/preprocess_cmrt.py \
 --output ./data/CMRT/cmrt_clean.sdf \
 --csp_setting ./preprocess/chirality_stationary_phase_list.csv
 
-# generate enantiomers
-python ./preprocess/convert_enantiomers.py --input ./data/CMRT/cmrt_clean.sdf --output ./data/CMRT/cmrt_clean_enatiomers.sdf
-
 # generate 3D conformations
 python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean.sdf --conf_type etkdg
-python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean_enatiomers.sdf --conf_type etkdg
 ```
 
 ## Experiments
@@ -124,8 +118,8 @@ nohup bash ./experiments/train_chir_etkdg_5fold_tl_p2.sh > molnet_chir_etkdg_5fo
 ```bash
 # traning from pre-trained model
 nohup bash ./experiments/train_chir_etkdg_tl.sh > molnet_chir_etkdg_tl.out 
-nohup bash ./experiments/train_chir_etkdg_tl_p1.sh > molnet_chir_etkdg_tl_p1_0804.out 
-nohup bash ./experiments/train_chir_etkdg_tl_p2.sh > molnet_chir_etkdg_tl_p2_0804.out 
+nohup bash ./experiments/train_chir_etkdg_tl_p1.sh > molnet_chir_etkdg_tl_p1.out 
+nohup bash ./experiments/train_chir_etkdg_tl_p2.sh > molnet_chir_etkdg_tl_p2.out 
 ```
 
 2. Preprocess CMRT
@@ -135,37 +129,11 @@ nohup bash ./experiments/train_chir_etkdg_tl_p2.sh > molnet_chir_etkdg_tl_p2_080
 ```bash
 # inference on one enantiomer
 nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out 
-
-# inference on the other enantiomer
-nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out
 ```
 
-### ~~5. Training on ChirBase excluding CMRT~~
 
-```bash
-# preprocessing
-# ChirBase - CMRT
-python ./preprocess/minus_sdf.py --minuend ./data/ChirBase/chirbase_clean4.sdf --subtrahend ./data/CMRT/cmrt_clean.sdf --output ./data/ChirBase/chirbase_minus_cmrt_clean.sdf
-nohup python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_minus_cmrt_clean.sdf --conf_type etkdg
-```
 
-### ~~3. Train & Eval (multi-task learning)~~
-
-```bash
-nohup python main_chir_kfold.py --config ./configs/molnet_chirality_cls_etkdg_multi.yaml --k_fold 5 \
-                            --log_dir ./logs/molnet_chirality/ \
-                            --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp_multi.pt \
-                            --result_path ./results/molnet_chirality_cls_etkdg_csp_multi.csv \
-                            --device 2 > molnet_chir_etkdg_5fold_multi.out 
-
-nohup python main_chir_kfold.py --config ./configs/molnet_chirality_cls_etkdg_multi_L.yaml --k_fold 5 \
-                            --log_dir ./logs/molnet_chirality/ \
-                            --checkpoint ./check_point/molnet_chirality_cls_etkdg_csp_multi_L.pt \
-                            --result_path ./results/molnet_chirality_cls_etkdg_csp_multi_L.csv \
-                            --device 0 > molnet_chir_etkdg_5fold_multi_L.out
-```
-
-## Jupyter Notebook
+<!-- ## Jupyter Notebook
 
 ```bash
 conda activate molnet
@@ -179,5 +147,5 @@ ssh -N -f -L localhost:8888:localhost:8889 yuhhong@boltzmann.luddy.indiana.edu
 ssh -N -f -L localhost:8888:localhost:8889 yuhhong@ampere.luddy.indiana.edu
 # visit: 
 # http://localhost:8888/
-```
+``` -->
 

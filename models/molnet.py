@@ -77,8 +77,6 @@ class MolConv(nn.Module):
 		dist, idx = pairwise_distance.topk(k=k, dim=2) # (batch_size, num_points, k)
 		dist = - dist
 
-		# device = torch.device("cuda:" + str(device)) if torch.cuda.is_available() else torch.device("cpu")
-		# idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1)*num_points
 		idx = idx + idx_base
 		idx = idx.view(-1)
 
@@ -90,7 +88,6 @@ class MolConv(nn.Module):
 
 		# gram matrix
 		gm_matrix = torch.matmul(graph_feat, graph_feat.permute(0, 1, 3, 2))
-		# gm_matrix = F.normalize(gm_matrix, dim=1) 
 		# print('_double_gram_matrix (gm_matrix):', torch.any(torch.isnan(gm_matrix)))
 
 		# double gram matrix
@@ -174,7 +171,6 @@ class MolNet(nn.Module):
 		super(MolNet, self).__init__()
 		self.num_add = args['num_add']
 		self.num_atoms = args['num_atoms']
-		# self.device = torch.device("cuda:" + str(device)) if torch.cuda.is_available() else torch.device("cpu")
 
 		self.encoder = Encoder(in_dim=args['in_channels'], 
 								layers=args['encoder_layers'], 

@@ -25,7 +25,7 @@ from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
 from sklearn.metrics import roc_auc_score, accuracy_score
 
-from datasets.dataset_cls import ChiralityDataset_infer
+from dataset import ChiralityDataset_infer
 from models.dgcnn import DGCNN
 from models.molnet import MolNet 
 from models.pointnet import PointNet
@@ -33,6 +33,8 @@ from models.schnet import SchNet
 from utils import set_seed, average_results_on_enantiomers
 
 TEST_BATCH_SIZE = 1 # global variable in inference
+
+
 
 def inference(model, device, loader, num_points, out_cls, csp_num): 
 	model.eval()
