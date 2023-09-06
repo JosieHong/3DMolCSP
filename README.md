@@ -127,7 +127,6 @@ nohup bash ./experiments/train_chir_etkdg_tl_p2.sh > molnet_chir_etkdg_tl_p2.out
 3. infer on CMRT
 
 ```bash
-# inference on one enantiomer
 nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out 
 ```
 
