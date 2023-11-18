@@ -101,38 +101,31 @@ class BaseDataset(Dataset):
 
 
 class ChiralityDataset(BaseDataset): 
-	def __init__(self, supp, num_points=200, num_csp=16, csp_no=0, flipping=False): 
+	def __init__(self, supp, num_points=200, csp_no=0, flipping=False): 
 		super(ChiralityDataset, self).__init__()
 		self.num_points = num_points
-		self.num_csp = num_csp
+		if flipping:
+			self.supp = [] # without balance
+			for mol in supp: 
+				mb = int(mol.GetProp('adduct'))
+				if mb != csp_no: 
+					continue
 
-		if num_csp > 1: # multiple csp_no 
-			assert csp_no == 0, "Charility phase number can not be chosen, if multi_scp==True. "
-			self.supp = supp
-
-		else: # single csp_no 
-			if flipping:
-				self.supp = [] # without balance
-				for mol in supp: 
-					mb = int(mol.GetProp('adduct'))
-					if mb != csp_no: 
-						continue
-
-					# flipping the conformation
-					conf = mol.GetConformer()
-					point_set = conf.GetPositions()
-					point_set[:, -1] *= -1
-					for i in range(mol.GetNumAtoms()): 
-						x, y, z = point_set[i]
-						conf.SetAtomPosition(i, Point3D(x,y,z))
-					self.supp.append(mol)
-			else: 
-				self.supp = [] # without balance
-				for mol in supp: 
-					mb = int(mol.GetProp('adduct'))
-					if mb != csp_no: 
-						continue
-					self.supp.append(mol)
+				# flipping the conformation
+				conf = mol.GetConformer()
+				point_set = conf.GetPositions()
+				point_set[:, -1] *= -1
+				for i in range(mol.GetNumAtoms()): 
+					x, y, z = point_set[i]
+					conf.SetAtomPosition(i, Point3D(x,y,z))
+				self.supp.append(mol)
+		else: 
+			self.supp = [] # without balance
+			for mol in supp: 
+				mb = int(mol.GetProp('adduct'))
+				if mb != csp_no: 
+					continue
+				self.supp.append(mol)
 	
 	def count_cls(self, out_cls, indices): 
 		print('Count the dataset...')
@@ -163,41 +156,6 @@ class ChiralityDataset(BaseDataset):
 					csp_dict[mb][y] = [i]
 			else:
 				csp_dict[mb] = {y: [i]}
-		
-		# # compute the coefficient
-		# csp_coef = {}
-		# csp_len = []
-		# for stat in csp_dict.values():
-		# 	csp_len.append(max([len(index) for index in stat.values()]))
-		# csp_max = max(csp_len)
-		# for csp, stat in csp_dict.items(): 
-		# 	print('Before balance ({}): {}'.format(csp, {k: len(v) for k, v in stat.items()}))
-		# 	if len(stat) < 3:
-		# 		print('Only {} class, drop this csp.'.format(len(stat))) # invalid csp
-		# 		continue
-				
-		# 	lengths = [len(v) for v in stat.values()]
-		# 	gcd = self.least_common_multiple(lengths)
-		# 	if gcd // max(lengths) > 3: 
-		# 		gcd = max(lengths) * 3
-		# 	coef4all = csp_max // max(lengths)
-		# 	coef = {k: int(gcd//len(v)*coef4all) for k, v in stat.items()}
-		# 	csp_coef.update({csp: coef})
-
-		# 	balance_stat = {k: int(len(v)*c) for (k, v), c in zip(stat.items(), coef.values())}
-		# 	print('After balance ({}): {}'.format(csp, balance_stat))
-		# print(csp_coef)
-
-		# # output the indices
-		# output_indices = []
-		# for i, mol in enumerate(train_supp): 
-		# 	mb = int(mol.GetProp('adduct'))
-		# 	chir = float(mol.GetProp('k2/k1'))
-		# 	y = self.convert2cls(chir, mol.GetProp('csp_category'))
-		# 	if mb in csp_coef.keys(): # exclude the invalud csp 
-		# 		c = csp_coef[mb][y]
-		# 		output_indices += [i] * c
-		# exit()
 
 		output_indices = []
 		for csp, stat in csp_dict.items(): 
@@ -211,7 +169,6 @@ class ChiralityDataset(BaseDataset):
 			if gcd // max(lengths) > 3: 
 				gcd = max(lengths) * 3
 			coef = {k: gcd//len(v) for k, v in stat.items()}
-			# print(coef)
 			balance_indices = []
 			balance_stat = {}
 			for i, mol in enumerate(train_supp): 
@@ -247,12 +204,7 @@ class ChiralityDataset(BaseDataset):
 		chir = float(mol.GetProp('k2/k1'))
 		Y = self.convert2cls(chir, mol.GetProp('csp_category'))
 		mb = int(mol.GetProp('adduct'))
-		if self.num_csp > 1: 
-			multi_Y = [np.nan] * self.num_csp
-			multi_Y[mb] = Y
-			return mol_id, smiles, mb, X, mask, torch.Tensor(multi_Y)
-		else: 
-			return mol_id, smiles, mb, X, mask, Y
+		return mol_id, smiles, mb, X, mask, Y
 
 	def convert2cls(self, chir, csp_category): 
 		if csp_category == '1': 

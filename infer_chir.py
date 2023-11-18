@@ -26,10 +26,7 @@ RDLogger.DisableLog('rdApp.*')
 from sklearn.metrics import roc_auc_score, accuracy_score
 
 from dataset import ChiralityDataset_infer
-from models.dgcnn import DGCNN
-from models.molnet import MolNet 
-from models.pointnet import PointNet
-from models.schnet import SchNet
+from model import MolNet 
 from utils import set_seed, average_results_on_enantiomers
 
 TEST_BATCH_SIZE = 1 # global variable in inference
@@ -102,16 +99,7 @@ if __name__ == "__main__":
 		config = yaml.load(f, Loader=yaml.FullLoader)
 	
 	device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
-	if config['model'] == 'molnet': 
-		model = MolNet(config['model_para'], args.device).to(device)
-	elif config['model'] == 'dgcnn':
-		model = DGCNN(config['model_para'], args.device).to(device) 
-	elif config['model'] == 'pointnet': 
-		model = PointNet(config['model_para'], args.device).to(device) 
-	elif config['model'] == 'schnet': 
-		model = SchNet(config['model_para'], args.device).to(device)
-	else:
-		raise ValueError('Not implemented model')
+	model = MolNet(config['model_para'], args.device).to(device)
 	num_params = sum(p.numel() for p in model.parameters())
 	# print(f'{str(model)} #Params: {num_params}')
 	print('#Params: {}'.format(num_params))

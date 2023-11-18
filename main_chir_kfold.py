@@ -27,10 +27,7 @@ RDLogger.DisableLog('rdApp.*')
 from sklearn.metrics import roc_auc_score, accuracy_score
 
 from dataset import ChiralityDataset
-from models.dgcnn import DGCNN
-from models.molnet import MolNet 
-from models.pointnet import PointNet
-from models.schnet import SchNet
+from model import MolNet_CSP 
 from utils import set_seed, average_results_on_enantiomers, cls_criterion
 
 TEST_BATCH_SIZE = 1 # global variable in validation
@@ -186,34 +183,17 @@ if __name__ == "__main__":
 		config = yaml.load(f, Loader=yaml.FullLoader)
 	
 	device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
-	if config['model'] == 'molnet': 
-		model = MolNet(config['model_para'], args.device).to(device)
-	elif config['model'] == 'dgcnn':
-		model = DGCNN(config['model_para'], args.device).to(device) 
-	elif config['model'] == 'pointnet': 
-		model = PointNet(config['model_para'], args.device).to(device) 
-	elif config['model'] == 'schnet': 
-		model = SchNet(config['model_para'], args.device).to(device)
-	else:
-		raise ValueError('Not implemented model')
-	num_params = sum(p.numel() for p in model.parameters())
-	# print(f'{str(model)} #Params: {num_params}')
-	print('#Params: {}'.format(num_params))
-
-	
 
 	# --------------- K-Fold Validation --------------- # 
 	print("Loading the data...") 
 	supp = Chem.SDMolSupplier(config['paths']['all_data'])
 	dataset = ChiralityDataset([item for item in batch_filter(supp)], 
 								num_points=config['model_para']['num_atoms'], 
-								num_csp=config['model_para']['csp_num'], 
 								csp_no=args.csp_no, 
 								flipping=False)
 	supp_ena = Chem.SDMolSupplier(config['paths']['all_data'])
 	dataset_ena = ChiralityDataset([item for item in batch_filter(supp_ena)], 
 								num_points=config['model_para']['num_atoms'], 
-								num_csp=config['model_para']['csp_num'], 
 								csp_no=args.csp_no, 
 								flipping=True)
 	print('Load {} data from {}.'.format(len(dataset), config['paths']['all_data']))
@@ -229,6 +209,11 @@ if __name__ == "__main__":
 	records = {'best_acc': [], 'best_auc': []}
 	for fold_i in range(args.k_fold): 
 		print('\n# --------------- Fold-{} --------------- #'.format(fold_i)) 
+		model = MolNet_CSP(config['model_para'], args.device).to(device)
+		num_params = sum(p.numel() for p in model.parameters())
+		# print(f'{str(model)} #Params: {num_params}')
+		print('#Params: {}'.format(num_params))
+
 		train_loader, valid_loader = load_data_fold(dataset, dataset_ena, 
 													split_indices, 
 													fold_i, 
