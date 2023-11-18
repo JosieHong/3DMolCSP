@@ -246,7 +246,6 @@ class Encoder(nn.Module):
 class MolNet_CSP(nn.Module): 
 	def __init__(self, args, device): 
 		super(MolNet_CSP, self).__init__()
-		self.num_add = args['num_add']
 		self.num_atoms = args['num_atoms']
 
 		self.encoder = Encoder(in_dim=args['in_channels'], 
@@ -254,11 +253,14 @@ class MolNet_CSP(nn.Module):
 									emb_dim=args['emb_dim'], 
 									k=args['k'], 
 									device=device)
-		self.decoder = FCResDecoder(in_dim=args['emb_dim']+args['num_add'], 
+		self.decoder = FCResDecoder(in_dim=args['emb_dim'], 
 									layers=args['decoder_layers'], 
 									out_dim=args['out_channels'], 
 									dropout=args['dropout'])
-		self.activation = nn.Softmax(dim=1)
+		if args['out_channels'] == 1: 
+			self.activation = nn.Sigmoid()
+		else: 
+			self.activation = nn.Softmax(dim=1)
 
 	def forward(self, x: torch.Tensor, 
 						env: torch.Tensor, 
@@ -272,12 +274,6 @@ class MolNet_CSP(nn.Module):
 		batch_size = x.size(0)
 		# encoder
 		x = self.encoder(x, idx_base)
-		
-		# add exp conditions
-		if self.num_add == 1:
-			x = torch.cat((x, torch.unsqueeze(env, 1)), 1)
-		elif self.num_add > 1:
-			x = torch.cat((x, env), 1)
 
 		# decoder
 		out = self.activation(self.decoder(x))

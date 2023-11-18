@@ -24,7 +24,7 @@ from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
 from sklearn.metrics import roc_auc_score, accuracy_score
 
-from dataset import ChiralityDataset
+from dataset import ChiralityDataset_EO
 from model import MolNet_CSP 
 from utils import set_seed, cls_criterion
 
@@ -34,7 +34,7 @@ def train(model, device, loader, optimizer, batch_size, num_points):
 	y_true = []
 	y_pred = []
 	for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
-		_, _, _, x, mask, y = batch
+		_, _, x, mask, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
@@ -64,9 +64,8 @@ def eval(model, device, loader, batch_size, num_points):
 	y_pred = []
 	smiles_list = []
 	id_list = []
-	mbs = []
 	for _, batch in enumerate(tqdm(loader, desc="Iteration")):
-		mol_id, smiles_iso, mb, x, mask, y = batch
+		mol_id, smiles_iso, x, mask, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
 		mask = mask.to(device).to(torch.float32)
@@ -81,11 +80,10 @@ def eval(model, device, loader, batch_size, num_points):
 		y_pred.append(pred.detach().cpu())
 		smiles_list.extend(smiles_iso)
 		id_list.extend(mol_id)
-		mbs.extend(mb.tolist())
 
 	y_true = torch.cat(y_true, dim=0) 
 	y_pred = torch.cat(y_pred, dim=0)
-	return id_list, smiles_list, mbs, y_true, y_pred
+	return id_list, smiles_list, y_true, y_pred
 
 def batch_filter(supp): 
 	for mol in supp: # remove empty molecule
@@ -99,19 +97,19 @@ def batch_filter(supp):
 
 if __name__ == "__main__": 
 	# Training settings
-	parser = argparse.ArgumentParser(description='3DMolCSP (train)')
-	parser.add_argument('--config', type=str, default = './configs/molnet_train_s.yaml',
+	parser = argparse.ArgumentParser(description='3DMolCSP for elution order prediction')
+	parser.add_argument('--config', type=str, default = '',
 						help='Path to configuration')
-	parser.add_argument('--csp_no', type=int, default=0,
-						help='charility phase number [0, 19]')
 	parser.add_argument('--log_dir', type=str, default="./logs/", 
 						help='tensorboard log directory')
 	parser.add_argument('--checkpoint', type=str, default = '', 
 						help='path to save checkpoint')
-	parser.add_argument('--resume_path', type=str, default='', 
-						help='Pretrained model path')
 	parser.add_argument('--transfer', action='store_true', 
-						help='Whether to load the pretrained encoder')
+						help='whether to load the pretrained encoder')
+	parser.add_argument('--resume_path', type=str, default='', 
+						help='pretrained model path or checkpoint path')
+	parser.add_argument('--result_path', type=str, default='', 
+						help='results path')
 
 	parser.add_argument('--device', type=int, default=0,
 						help='which gpu to use if any (default: 0)')
@@ -135,39 +133,16 @@ if __name__ == "__main__":
 	
 	print("Loading the data...")
 	supp = Chem.SDMolSupplier(config['paths']['train_data'])
-	train_set = ChiralityDataset([item for item in batch_filter(supp)], 
-								num_points=config['model_para']['num_atoms'], 
-								csp_no=args.csp_no, 
-								flipping=False)
-	supp_ena = Chem.SDMolSupplier(config['paths']['train_data'])
-	train_set_ena = ChiralityDataset([item for item in batch_filter(supp_ena)], 
-								num_points=config['model_para']['num_atoms'], 
-								csp_no=args.csp_no, 
-								flipping=True)
-
-	train_indices = train_set.balance_indices(list(range(len(train_set)))) # use this line to make balance sampling
-
-	train_indices += [i+len(train_set) for i in train_indices] # add enantiomers (use the same indexes for two configurations prohibit data leaking)
-	train_sampler = SubsetRandomSampler(train_indices)
-
-	train_set = ConcatDataset([train_set, train_set_ena]) # concat two configurations' datasets
+	train_set = ChiralityDataset_EO([item for item in batch_filter(supp)], 
+								num_points=config['model_para']['num_atoms'])
 	train_loader = DataLoader(train_set,
 								batch_size=config['train_para']['batch_size'],
 								num_workers=config['train_para']['num_workers'],
-								drop_last=True,
-								sampler=train_sampler)
+								drop_last=True)
 
 	supp = Chem.SDMolSupplier(config['paths']['valid_data'])
-	valid_set = ChiralityDataset([item for item in batch_filter(supp)], 
-								num_points=config['model_para']['num_atoms'], 
-								csp_no=args.csp_no, 
-								flipping=False)
-	supp_ena = Chem.SDMolSupplier(config['paths']['valid_data'])
-	valid_set_ena = ChiralityDataset([item for item in batch_filter(supp_ena)], 
-								num_points=config['model_para']['num_atoms'], 
-								csp_no=args.csp_no, 
-								flipping=True)
-	valid_set = ConcatDataset([valid_set, valid_set_ena]) # concat two configurations' datasets
+	valid_set = ChiralityDataset_EO([item for item in batch_filter(supp)], 
+								num_points=config['model_para']['num_atoms'])
 	valid_loader = DataLoader(valid_set,
 								batch_size=2, 
 								num_workers=config['train_para']['num_workers'],
@@ -218,20 +193,17 @@ if __name__ == "__main__":
 								config['train_para']['batch_size'], 
 								config['model_para']['num_atoms'])
 		train_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
-		y_pred = torch.argmax(y_pred, dim=1)
-		train_acc = accuracy_score(y_true, y_pred)
+		y_pred_binary = torch.where(y_pred > 0.5, 1., 0.)
+		train_acc = accuracy_score(y_true, y_pred_binary)
 
 		print('Evaluating...')
-		id_list, smiles_list, mbs, y_true, y_pred = eval(model, device, valid_loader, 
+		id_list, smiles_list, y_true, y_pred = eval(model, device, valid_loader, 
 														config['train_para']['batch_size'], 
 														config['model_para']['num_atoms'])
-		try: 
-			valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
-		except: 
-			valid_auc = np.nan
 		
-		y_pred = torch.argmax(y_pred, dim=1)
-		valid_acc = accuracy_score(y_true, y_pred)
+		valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
+		y_pred_binary = torch.where(y_pred > 0.5, 1., 0.)
+		valid_acc = accuracy_score(y_true, y_pred_binary)
 		
 		print("Train ACC: {} Train AUC: {}\nValid ACC: {} Valid AUC: {}\n".format(train_acc, train_auc, valid_acc, valid_auc))
 
@@ -264,3 +236,17 @@ if __name__ == "__main__":
 	if args.log_dir != '':
 		writer.close()
 
+	if args.result_path != '':
+		print("Load the best checkpoints...")
+		model.load_state_dict(torch.load(checkpoint_path, map_location=device)['model_state_dict'])
+
+		id_list_test, smiles_list_test, y_true_test, y_pred_test = eval(model, device, valid_loader, 1, 
+														config_model_elution_order['num_atoms'])
+		y_pred_test_binary = torch.where(y_pred_test > 0.5, 1., 0.)
+		test_res = {'SMILES': smiles_list, 'True': y_true, 
+					'Pred Final': y_pred_test_binary, 
+					'Pred': [';'.join(p.astype('str')) for p in y_pred_test.detach().numpy()]}
+		df_test = pd.DataFrame.from_dict(test_res)
+		df_test.to_csv(args.result_path)
+
+	

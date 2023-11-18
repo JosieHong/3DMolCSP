@@ -34,7 +34,7 @@ TEST_BATCH_SIZE = 1 # global variable in validation
 
 
 
-def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, out_cls, csp_num):
+def train(model, device, loader, optimizer, batch_size, num_points):
 	y_true = []
 	y_pred = []
 	for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
@@ -49,31 +49,20 @@ def train(model, device, loader, optimizer, accum_iter, batch_size, num_points, 
 		pred = model(x, None, idx_base)
 		# print('pred', pred.size())
 
-		invalid_y = torch.isnan(y)
-		if csp_num > 1: 
-			invalid_pred = invalid_y.unsqueeze(2).repeat(1, 1, out_cls)
-		else:
-			invalid_pred = invalid_y
-		loss = cls_criterion(pred[~invalid_pred].view(y.size(0), -1), y[~invalid_y])
-		# normalize loss to account for batch accumulation
-		loss = loss / accum_iter 
+		loss = cls_criterion(pred, y)
 		loss.backward()
 
-		# optimizer.step()
-		# optimizer.zero_grad()
-		# weights update
-		if ((step + 1) % accum_iter == 0) or (step + 1 == len(loader)):
-			optimizer.step()
-			optimizer.zero_grad()
+		optimizer.step()
+		optimizer.zero_grad()
 
-		y_true.append(y[~invalid_y].detach().cpu())
-		y_pred.append(pred[~invalid_pred].view(y.size(0), -1).detach().cpu())
+		y_true.append(y.detach().cpu())
+		y_pred.append(pred.detach().cpu())
 
 	y_true = torch.cat(y_true, dim=0)
 	y_pred = torch.cat(y_pred, dim=0)
 	return y_true, y_pred
 
-def eval(model, device, loader, batch_size, num_points, out_cls, csp_num): 
+def eval(model, device, loader, batch_size, num_points): 
 	model.eval()
 	y_true = []
 	y_pred = []
@@ -92,13 +81,8 @@ def eval(model, device, loader, batch_size, num_points, out_cls, csp_num):
 		with torch.no_grad(): 
 			pred = model(x, None, idx_base)
 
-		invalid_y = torch.isnan(y)
-		if csp_num > 1: 
-			invalid_pred = invalid_y.unsqueeze(2).repeat(1, 1, out_cls)
-		else:
-			invalid_pred = invalid_y
-		y_true.append(y[~invalid_y].detach().cpu())
-		y_pred.append(pred[~invalid_pred].view(y.size(0), -1).detach().cpu())
+		y_true.append(y.detach().cpu())
+		y_pred.append(pred.detach().cpu())
 		smiles_list.extend(smiles_iso)
 		id_list.extend(mol_id)
 		mbs.extend(mb.tolist())
@@ -150,7 +134,7 @@ def load_data_fold(dataset, dataset_ena, split_indices, fold_i, num_workers, bat
 
 if __name__ == "__main__":
 	# Training settings
-	parser = argparse.ArgumentParser(description='Molecular Properties Prediction')
+	parser = argparse.ArgumentParser(description='3DMolCSP (train in k-fold)')
 	parser.add_argument('--config', type=str, default = './configs/molnet_train_s.yaml',
 						help='Path to configuration')
 	parser.add_argument('--csp_no', type=int, default=0,
@@ -274,11 +258,8 @@ if __name__ == "__main__":
 
 			print('Training...')
 			y_true, y_pred = train(model, device, train_loader, optimizer, 
-									config['train_para']['accum_iter'], 
 									config['train_para']['batch_size'], 
-									config['model_para']['num_atoms'], 
-									config['model_para']['out_channels'], 
-									config['model_para']['csp_num'])
+									config['model_para']['num_atoms'])
 			train_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
 			y_pred = torch.argmax(y_pred, dim=1)
 			train_acc = accuracy_score(y_true, y_pred)
@@ -286,9 +267,7 @@ if __name__ == "__main__":
 			print('Evaluating...')
 			id_list, smiles_list, mbs, y_true, y_pred = eval(model, device, valid_loader, 
 															config['train_para']['batch_size'], 
-															config['model_para']['num_atoms'], 
-															config['model_para']['out_channels'],
-															config['model_para']['csp_num'])
+															config['model_para']['num_atoms'])
 			try: 
 				valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
 			except: 
@@ -343,8 +322,7 @@ if __name__ == "__main__":
 			id_list, smiles_list, mbs, y_true, y_pred = eval(model, device, valid_loader, 
 															config['train_para']['batch_size'], 
 															config['model_para']['num_atoms'], 
-															config['model_para']['out_channels'],
-															config['model_para']['csp_num'])
+															config['model_para']['out_channels'])
 			y_pred_out = []
 			for y in y_pred:
 				y_pred_out.append(','.join([str(i) for i in y.tolist()]))

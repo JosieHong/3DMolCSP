@@ -32,7 +32,10 @@ def set_seed(seed):
 	np.random.seed(seed)
 	random.seed(seed)
 
-def cls_criterion(outputs, targets): # Cross Entropy Loss
+def cls_criterion(outputs, targets): 
 	targets = torch.squeeze(targets)
-	loss = nn.CrossEntropyLoss()(outputs, targets.to(torch.int64))
+	if len(outputs.size()) == 1:
+		loss = nn.BCELoss()(outputs, targets.float())
+	else: 
+		loss = nn.CrossEntropyLoss()(outputs, targets.to(torch.int64))
 	return loss

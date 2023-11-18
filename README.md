@@ -133,7 +133,22 @@ nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out
 ### Exp4: Elution order prediction
 
 ```bash
+python ./preprocess/preprocess_chirbase_eo.py \
+--input_eo ./data/ChirBase_eo/w_ena/ad_sr.sdf \
+--input ./data/ChirBase/chirbase.sdf \
+--csp_setting ./preprocess/chirality_stationary_phase_list.csv \
+--output ./data/ChirBase_eo/exp/ad_sr_clean.sdf
 
+python ./preprocess/random_split_sdf.py --use_isomeric_smiles \
+--input ./data/ChirBase_eo/exp/ad_sr_clean.sdf \
+--output_train ./data/ChirBase_eo/exp/ad_sr_clean_train.sdf \
+--output_test ./data/ChirBase_eo/exp/ad_sr_clean_test.sdf
+
+python main_chir_eo.py --config ./configs/molnet_train_eo_ad.yaml \
+--checkpoint ./check_point_eo/molnet_eo_ad.pt \
+--result_path ./results_eo/molnet_eo_ad.csv \
+--device 0 \
+--resume_path ./check_point_eo/molnet_eo_ad.pt
 ```
 
 <!-- ## Jupyter Notebook

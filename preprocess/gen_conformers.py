@@ -19,13 +19,13 @@ from rdkit.Chem.Draw import rdDepictor
 if __name__ == "__main__":
     # Training settings
     parser = argparse.ArgumentParser(description='Molecular Conformers Generator')
-    parser.add_argument('--path', type=str, default="./data/CCS/allCCS_exp_all.csv", 
-                        help='Path to data')
-    parser.add_argument('--conf_type', type=str, default = 'etkdg', 
+    parser.add_argument('--path', type=str, default="", 
+                        help='path to input data')
+    parser.add_argument('--conf_type', type=str, default='etkdg', 
                         choices=['2d', 'etkdg', 'etkdgv3', 'omega'], 
-                        help='Dataset name')
+                        help='conformation type')
     parser.add_argument('--license', type=str, default="./license/oe_license.txt", 
-                        help='Path to openeye license')
+                        help='path to openeye license')
     args = parser.parse_args()
 
 

@@ -263,3 +263,49 @@ class ChiralityDataset_infer(BaseDataset):
 		mb = int(self.csp_no)
 		return smiles, mb, X, mask
 
+
+
+# elution order prediction
+class ChiralityDataset_EO(BaseDataset): 
+	def __init__(self, supp, num_points=200): 
+		super(ChiralityDataset_EO, self).__init__()
+		self.num_points = num_points
+		self.supp = supp
+
+	def __len__(self):
+		return len(self.supp)
+
+	def __getitem__(self, idx): 
+		mol = self.supp[idx]
+		mol_id = mol.GetProp('id')
+		smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
+		X, mask = self.create_X(mol, self.num_points)
+		# chir = float(mol.GetProp('k2/k1'))
+		# Y = self.convert2cls(chir, mol.GetProp('csp_category'))
+		Y = int(mol.GetProp('elution_order'))
+		return mol_id, smiles, X, mask, Y
+
+	# def convert2cls(self, chir, csp_category): 
+	# 	if csp_category == '1': 
+	# 		# For polysaccharide CSPs:
+	# 		if chir < 1.15:
+	# 			y = 0
+	# 		elif chir < 1.2:
+	# 			y = 1
+	# 		elif chir < 2.1:
+	# 			y = 2
+	# 		else:
+	# 			y = 3
+	# 	elif csp_category == '2': 
+	# 		# For Pirkle CSPs:
+	# 		if chir < 1.05: 
+	# 			y = 0
+	# 		elif chir < 1.15:
+	# 			y = 1
+	# 		elif chir < 2: 
+	# 			y = 2
+	# 		else:
+	# 			y = 3
+	# 	else:
+	# 		raise Exception("The category for CSP should be 1 or 2, rather than {}.".format(csp_category))
+	# 	return y

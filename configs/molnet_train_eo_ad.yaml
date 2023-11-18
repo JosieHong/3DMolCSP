@@ -2,10 +2,8 @@ model: 'molnet'
 dataset: 'chirality'
 
 paths: 
-  train_data: './data/ChirBase/chirobiotic_v_etkdg_train.sdf' 
-  valid_data: './data/ChirBase/chirobiotic_v_etkdg_test.sdf'
-  all_data: './data/ChirBase/chirobiotic_v_etkdg.sdf'  # for k-fold
-  test_data: './data/CMRT/cmrt_clean_etkdg.sdf' # for inference
+  train_data: './data/ChirBase_eo/exp/ad_sr_clean_train.sdf' 
+  valid_data: './data/ChirBase_eo/exp/ad_sr_clean_test.sdf'
 
 model_para: 
   in_channels: 21
@@ -15,12 +13,12 @@ model_para:
   k: 5
   decoder_layers: [512, 256, 128, 64]
   dropout: 0.3
-  out_channels: 4
+  out_channels: 1
 
 train_para:
-  batch_size: 128
-  epochs: 200
-  lr: 0.0001
+  batch_size: 256
+  epochs: 100
+  lr: 0.0002
   num_workers: 0
   weight_decay: 0.01
   scheduler: 

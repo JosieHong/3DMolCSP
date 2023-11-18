@@ -33,7 +33,7 @@ TEST_BATCH_SIZE = 1 # global variable in inference
 
 
 
-def inference(model, device, loader, num_points, out_cls, csp_num): 
+def inference(model, device, loader, num_points): 
 	model.eval()
 	y_pred = []
 	smiles_list = []
@@ -70,7 +70,7 @@ def batch_filter(supp):
 
 if __name__ == "__main__": 
 	# Training settings
-	parser = argparse.ArgumentParser(description='Molecular Properties Prediction')
+	parser = argparse.ArgumentParser(description='3DMolCSP (infer)')
 	parser.add_argument('--config', type=str, required=True, 
 						help='Path to configuration')
 	parser.add_argument('--csp_no', type=int, default=0, required=True, 
@@ -128,9 +128,7 @@ if __name__ == "__main__":
 
 	print('Evaluating...')
 	id_list, smiles_list, mbs, y_pred = inference(model, device, test_loader, 
-													config['model_para']['num_atoms'], 
-													config['model_para']['out_channels'],
-													config['model_para']['csp_num'])
+													config['model_para']['num_atoms'])
 	y_pred_out = []
 	for y in y_pred:
 		y_pred_out.append(','.join([str(i) for i in y.tolist()]))

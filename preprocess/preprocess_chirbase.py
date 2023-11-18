@@ -48,8 +48,6 @@ if __name__ == '__main__':
 	pp.pprint(CSP_DICT)
 
 	supp = Chem.SDMolSupplier(args.input)
-	out_mols = []
-	mobile_phase = []
 	print('Get {} data from {}'.format(len(supp), args.input))
 
 	# filter out the noise molecules (double- or triple- labeled) &

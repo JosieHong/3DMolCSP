@@ -12,18 +12,15 @@ paths:
 model_para: 
   in_channels: 21
   num_atoms: 100
-  num_add: 0
   encoder_layers: [64, 64, 128, 256, 512, 1024]
   emb_dim: 2048
   k: 5
   decoder_layers: [512, 256, 128, 64]
   dropout: 0.3
-  csp_num: 1
   out_channels: 4
 
 train_para: # this configuration is used for inference only
   batch_size: None
-  accum_iter: None
   epochs: 0
   lr: None
   num_workers: None
