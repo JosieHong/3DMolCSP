@@ -2,8 +2,8 @@ model: 'molnet'
 dataset: 'chirality'
 
 paths: 
-  train_data: './data/ChirBase_eo/exp/ad_sr_clean_train.pkl' 
-  valid_data: './data/ChirBase_eo/exp/ad_sr_clean_test.pkl'
+  train_data: './data/ChirBase_eo/exp/ia_sr_clean_train.pkl' 
+  valid_data: './data/ChirBase_eo/exp/ia_sr_clean_test.pkl'
 
 model_para: 
   in_channels: 22
@@ -18,7 +18,7 @@ model_para:
 train_para: 
   batch_size: 128
   epochs: 500
-  lr: 0.00001
+  lr: 0.0001
   num_workers: 0
   weight_decay: 0.9
   scheduler: 

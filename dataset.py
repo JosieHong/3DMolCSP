@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 
 import numpy as np
 import math
+import pickle
 
 from rdkit import Chem
 from rdkit.Geometry import Point3D
@@ -45,7 +46,7 @@ class BaseDataset(Dataset):
 		except: # parse the MolBlock by ourself
 			mol_block = Chem.MolToMolBlock(mol).split("\n")
 			point_set = self.parse_mol_block(mol_block) # 0. x,y,z-coordinates; 
-
+			
 		for idx, atom in enumerate(mol.GetAtoms()): 
 			point_set[idx] = point_set[idx] + self.ENCODE_ATOM[atom.GetSymbol()] # atom type (one-hot);
 			point_set[idx].append(atom.GetDegree()) # 1. number of immediate neighbors who are “heavy” (nonhydrogen) atoms;
@@ -55,16 +56,18 @@ class BaseDataset(Dataset):
 			point_set[idx].append(atom.GetNumImplicitHs()) # 5. number of implicit hydrogens;
 			point_set[idx].append(int(atom.GetIsAromatic())) # Is aromatic
 			point_set[idx].append(int(atom.IsInRing())) # Is in a ring
-			
+
 		point_set = np.array(point_set).astype(np.float32)
 
-		# generate mask
-		point_mask = np.ones_like(point_set[0])
-		point_mask = torch.cat((torch.Tensor(point_mask), torch.zeros((num_points-point_mask.shape[0]))), dim=0)
-		
+		# center the points
+		points_xyz = point_set[:, :3]
+		centroid = np.mean(points_xyz, axis=0)
+		points_xyz -= centroid
+		point_set = np.concatenate((points_xyz, point_set[:, 3:]), axis=1)
+
 		# pad zeros
 		point_set = torch.cat((torch.Tensor(point_set), torch.zeros((num_points-point_set.shape[0], point_set.shape[1]))), dim=0)
-		return point_set, point_mask # torch.Size([num_points, 14]), torch.Size([num_points])
+		return point_set #, point_mask # torch.Size([num_points, 14]), torch.Size([num_points])
 	
 	def parse_mol_block(self, mol_block): 
 		'''
@@ -89,13 +92,6 @@ class BaseDataset(Dataset):
 				else: 
 					continue
 				points.append(point)
-		
-		# center the points
-		points_xyz = points[:, :3]
-		centroid = np.mean(points_xyz, axis=0)
-		points_xyz -= centroid
-
-		points = np.concatenate((points_xyz, points[:, 3:]), axis=1)
 		return points
 		
 
@@ -200,11 +196,11 @@ class ChiralityDataset(BaseDataset):
 		mol = self.supp[idx]
 		mol_id = mol.GetProp('id')
 		smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
-		X, mask = self.create_X(mol, self.num_points)
+		X = self.create_X(mol, self.num_points)
 		chir = float(mol.GetProp('k2/k1'))
 		Y = self.convert2cls(chir, mol.GetProp('csp_category'))
 		mb = int(mol.GetProp('adduct'))
-		return mol_id, smiles, mb, X, mask, Y
+		return mol_id, smiles, mb, X, Y
 
 	def convert2cls(self, chir, csp_category): 
 		if csp_category == '1': 
@@ -259,53 +255,80 @@ class ChiralityDataset_infer(BaseDataset):
 	def __getitem__(self, idx): 
 		mol = self.supp[idx]
 		smiles = Chem.MolToSmiles(mol)
-		X, mask = self.create_X(mol, self.num_points)
+		X = self.create_X(mol, self.num_points)
 		mb = int(self.csp_no)
-		return smiles, mb, X, mask
+		return smiles, mb, X
 
 
 
 # elution order prediction
 class ChiralityDataset_EO(BaseDataset): 
-	def __init__(self, supp, num_points=200): 
+	def __init__(self, root_path, num_points=200): 
 		super(ChiralityDataset_EO, self).__init__()
-		self.num_points = num_points
-		self.supp = supp
+		with open(root_path, 'rb') as file: 
+			data = pickle.load(file)
 
+		# filter out the inseparable enantiomers
+		self.filtered_data = []
+		for d in data:
+			sep_cls = self.convert2cls(d['k2/k1'], d['csp_category'])
+			if sep_cls > 1: 
+				self.filtered_data.append(d)
+				
 	def __len__(self):
-		return len(self.supp)
+		return len(self.filtered_data)
 
 	def __getitem__(self, idx): 
-		mol = self.supp[idx]
-		mol_id = mol.GetProp('id')
-		smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
-		X, mask = self.create_X(mol, self.num_points)
-		# chir = float(mol.GetProp('k2/k1'))
-		# Y = self.convert2cls(chir, mol.GetProp('csp_category'))
-		Y = int(mol.GetProp('elution_order'))
-		return mol_id, smiles, X, mask, Y
+		return self.filtered_data[idx]['smiles_iso'], self.filtered_data[idx]['smiles'], \
+				self.filtered_data[idx]['pos'], self.filtered_data[idx]['neg'], self.filtered_data[idx]['anchor'], \
+				int(self.filtered_data[idx]['elution_order'])
 
-	# def convert2cls(self, chir, csp_category): 
-	# 	if csp_category == '1': 
-	# 		# For polysaccharide CSPs:
-	# 		if chir < 1.15:
-	# 			y = 0
-	# 		elif chir < 1.2:
-	# 			y = 1
-	# 		elif chir < 2.1:
-	# 			y = 2
-	# 		else:
-	# 			y = 3
-	# 	elif csp_category == '2': 
-	# 		# For Pirkle CSPs:
-	# 		if chir < 1.05: 
-	# 			y = 0
-	# 		elif chir < 1.15:
-	# 			y = 1
-	# 		elif chir < 2: 
-	# 			y = 2
-	# 		else:
-	# 			y = 3
-	# 	else:
-	# 		raise Exception("The category for CSP should be 1 or 2, rather than {}.".format(csp_category))
-	# 	return y
+	def convert2cls(self, chir, csp_category): 
+		if csp_category == 1: 
+			# For polysaccharide CSPs:
+			if chir < 1.15:
+				y = 0
+			elif chir < 1.2:
+				y = 1
+			elif chir < 2.1:
+				y = 2
+			else:
+				y = 3
+		elif csp_category == 2: 
+			# For Pirkle CSPs:
+			if chir < 1.05: 
+				y = 0
+			elif chir < 1.15:
+				y = 1
+			elif chir < 2: 
+				y = 2
+			else:
+				y = 3
+		else:
+			raise Exception("The category for CSP should be 1 or 2, rather than {}".format(csp_category))
+		return y
+
+# s/r configutation prediction
+class ChiralityDataset_SR(BaseDataset): 
+	def __init__(self, root_path, num_points=200): 
+		super(ChiralityDataset_SR, self).__init__()
+		with open(root_path, 'rb') as file: 
+			self.data = pickle.load(file)
+				
+	def __len__(self):
+		return len(self.data)
+
+	def __getitem__(self, idx): 
+		return self.data[idx]['smiles_iso'], self.data[idx]['smiles'], self.data[idx]['pos'], self.data[idx]['neg'], self.data[idx]['anchor'], self.data[idx]['chiral_tag']
+
+class ChiralityDataset_ChlRo_SR(BaseDataset): 
+	def __init__(self, root_path, num_points=200): 
+		super(ChiralityDataset_ChlRo_SR, self).__init__()
+		with open(root_path, 'rb') as file: 
+			self.data = pickle.load(file)
+				
+	def __len__(self):
+		return len(self.data)
+
+	def __getitem__(self, idx): 
+		return self.data[idx]['id'], self.data[idx]['mol'], self.data[idx]['chiral_tag']

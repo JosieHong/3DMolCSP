@@ -133,23 +133,39 @@ nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out
 ### Exp4: Elution order prediction
 
 ```bash
-python ./preprocess/preprocess_chirbase_eo.py \
---input_eo ./data/ChirBase_eo/w_ena/ad_sr.sdf \
---input ./data/ChirBase/chirbase.sdf \
---csp_setting ./preprocess/chirality_stationary_phase_list.csv \
---output ./data/ChirBase_eo/exp/ad_sr_clean.sdf
+nohup bash ./experiments/train_chir_etkdg_eo.sh > train_chir_etkdg_eo.out 
 
-python ./preprocess/random_split_sdf.py --use_isomeric_smiles \
---input ./data/ChirBase_eo/exp/ad_sr_clean.sdf \
---output_train ./data/ChirBase_eo/exp/ad_sr_clean_train.sdf \
---output_test ./data/ChirBase_eo/exp/ad_sr_clean_test.sdf
-
-python main_chir_eo.py --config ./configs/molnet_train_eo_ad.yaml \
---checkpoint ./check_point_eo/molnet_eo_ad.pt \
---result_path ./results_eo/molnet_eo_ad.csv \
---device 0 \
---resume_path ./check_point_eo/molnet_eo_ad.pt
+python main_chir_emb.py --config ./configs/molnet_train_eo_ad_emb.yaml \
+--checkpoint ./check_point_eo/molnet_chirbase_ad_emb.pt \
+--result_path ./results_eo/molnet_chirbase_ad_emb.csv \
+--device 1 
 ```
+
+### ~~Exp5: Chiral configuration prediction~~
+
+```bash
+python ./preprocess/preprocess_chirbase_sr.py \
+--input ./data/ChirBase/chirbase.sdf \
+--output ./data/ChirBase/sr_exp/chirbase_sr_clean.sdf
+
+python main_chir_sr.py --config ./configs/molnet_train_chirbase_sr.yaml \
+--checkpoint ./check_point_eo/molnet_chirbase_rs.pt \
+--result_path ./results_eo/molnet_chirbase_rs.csv \
+--device 1 
+```
+
+```bash
+nohup python ./preprocess/preprocess_sr.py \
+--input_dir ./data/SRCls/ \
+--output_dir ./data/SRCls/ > preprocess_sr.out 
+
+python main_sr.py --config ./configs/molnet_train_sr.yaml \
+--checkpoint ./check_point_eo/molnet_rs.pt \
+--result_path ./results_eo/molnet_rs.csv \
+--device 1 
+```
+
+
 
 <!-- ## Jupyter Notebook
 

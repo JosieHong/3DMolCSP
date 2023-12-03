@@ -26,7 +26,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 
 from dataset import ChiralityDataset
 from model import MolNet_CSP 
-from utils import set_seed, cls_criterion
+from utils import set_seed, CE_loss
 
 
 
@@ -34,18 +34,17 @@ def train(model, device, loader, optimizer, batch_size, num_points):
 	y_true = []
 	y_pred = []
 	for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
-		_, _, _, x, mask, y = batch
+		_, _, _, x, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
-		mask = mask.to(device).to(torch.float32)
 		y = y.to(device)
 		idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
 		model.train()
-		pred = model(x, None, idx_base)
+		pred = model(x, idx_base)
 		# print('pred', pred.size())
 
-		loss = cls_criterion(pred, y)
+		loss = CE_loss(pred, y.float())
 		loss.backward()
 
 		optimizer.step()
@@ -66,16 +65,15 @@ def eval(model, device, loader, batch_size, num_points):
 	id_list = []
 	mbs = []
 	for _, batch in enumerate(tqdm(loader, desc="Iteration")):
-		mol_id, smiles_iso, mb, x, mask, y = batch
+		mol_id, smiles_iso, mb, x, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
-		mask = mask.to(device).to(torch.float32)
 		y = y.to(device)
 
-		idx_base = torch.arange(0, 2, device=device).view(-1, 1, 1) * num_points
+		idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
 		with torch.no_grad(): 
-			pred = model(x, None, idx_base)
+			pred = model(x, idx_base)
 
 		y_true.append(y.detach().cpu())
 		y_pred.append(pred.detach().cpu())
@@ -169,7 +167,7 @@ if __name__ == "__main__":
 								flipping=True)
 	valid_set = ConcatDataset([valid_set, valid_set_ena]) # concat two configurations' datasets
 	valid_loader = DataLoader(valid_set,
-								batch_size=2, 
+								batch_size=config['train_para']['batch_size'], 
 								num_workers=config['train_para']['num_workers'],
 								drop_last=True)
 	print('Load {} test data from {}.'.format(len(valid_set), config['paths']['valid_data']))

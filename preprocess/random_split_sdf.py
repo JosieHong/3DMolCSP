@@ -24,31 +24,34 @@ if __name__ == '__main__':
 						help='path to output data')
 	parser.add_argument('--output_test', type=str, default = '',
 						help='path to output data')
+	parser.add_argument('--test_ratio', type=float, default = 0.1,
+						help='test ratio')
 	args = parser.parse_args()
 
 
 	suppl = Chem.SDMolSupplier(args.input)
 	mols = [x for x in suppl if x != None]
-
+	assert args.test_ratio < 1.
 	
 	# output the smiles list
-	SMILES_OUT_PATH = '/'.join(args.input.split('/')[:-1]) + '/SMILES_list.txt'
+	SMILES_OUT_PATH = args.input.replace('.sdf', '_SMILES_list.txt')
 	if args.use_isomeric_smiles:
 		smiles = list(set([Chem.MolToSmiles(m, isomericSmiles=True) for m in mols]))
 	else:
 		smiles = list(set([Chem.MolToSmiles(m, isomericSmiles=False) for m in mols]))
+	# smiles = list(set([Chem.MolToSmiles(m, isomericSmiles=False) for m in mols]))
 
 
 	smiles_out = "\n".join(smiles)
 	with open(SMILES_OUT_PATH, 'w') as f:
 		f.write(smiles_out)
-	print("Load {} / {} data from {}".format(len(mols), len(smiles), args.input))
+	print("Load {} records / {} compounds from {}".format(len(mols), len(smiles), args.input))
 
 
 	# split the data by smiles
-	Ltest = np.random.choice(smiles, int(len(smiles)*0.1), replace=False)
+	Ltest = np.random.choice(smiles, int(len(smiles)*args.test_ratio), replace=False)
 	Ltrain = [x for x in smiles if x not in Ltest]
-	print("Get {} training data, {} test data".format(len(Ltrain), len(Ltest)))
+	print("Get {} training compounds, {} test compounds".format(len(Ltrain), len(Ltest)))
 
 
 	# wite the training and test data
@@ -59,9 +62,10 @@ if __name__ == '__main__':
 			s = Chem.MolToSmiles(m, isomericSmiles=True)
 		else: 
 			s = Chem.MolToSmiles(m, isomericSmiles=False)
+		# s = Chem.MolToSmiles(m, isomericSmiles=False)
 
 		if s in Ltest:
 			w_test.write(m)
 		else:
 			w_train.write(m)
-	print("Save training and test data to {} and {}".format(args.output_train, args.output_test))
+	print("Save training and test data to {} \nand {}".format(args.output_train, args.output_test))

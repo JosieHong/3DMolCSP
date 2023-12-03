@@ -6,6 +6,7 @@ LastEditTime: 2022-12-12 12:57:28
 import os
 import argparse
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 import yaml
 
@@ -25,37 +26,69 @@ RDLogger.DisableLog('rdApp.*')
 from sklearn.metrics import roc_auc_score, accuracy_score
 
 from dataset import ChiralityDataset_EO
-from model import MolNet_CSP 
-from utils import set_seed, cls_criterion
+from model import MolNet_CSP
+from utils import set_seed, BCE_loss, get_lr, triplet_loss
 
-
+def custom_replace(tensor, on_zero, on_non_zero): 
+    # we create a copy of the original tensor, 
+    # because of the way we are replacing them.
+    res = tensor.clone()
+    res[tensor==0] = on_zero
+    res[tensor!=0] = on_non_zero
+    return res
 
 def train(model, device, loader, optimizer, batch_size, num_points): 
 	y_true = []
 	y_pred = []
-	for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
-		_, _, x, mask, y = batch
-		x = x.to(device).to(torch.float32)
-		x = x.permute(0, 2, 1)
-		mask = mask.to(device).to(torch.float32)
-		y = y.to(device)
-		idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
+	loss1_list = []
+	# loss2_list = []
+	cos1_list = []
+	cos2_list = []
+	with tqdm(total=len(loader)) as bar: 
+		for step, batch in enumerate(loader): 
+			_, _, pos, neg, anchor, y = batch
+			pos = pos.to(device).to(torch.float32)
+			pos = pos.permute(0, 2, 1)
+			neg = neg.to(device).to(torch.float32)
+			neg = neg.permute(0, 2, 1)
+			anchor = anchor.to(device).to(torch.float32)
+			anchor = anchor.permute(0, 2, 1)
+			y = y.to(device)
+			idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
-		model.train()
-		pred = model(x, None, idx_base)
-		# print('pred', pred.size())
+			model.train()
+			emb_pos, pred = model(pos, idx_base)
+			emb_neg, pred2 = model(neg, idx_base)
+			emb_anchor, pred3 = model(anchor, idx_base)
+			# print(emb.size(), emb2.size(), COS(emb, emb2))
+			# print('pred', pred.size())
+			# print('y', y.size())
 
-		loss = cls_criterion(pred, y)
-		loss.backward()
+			loss = BCE_loss(pred, y.float()) + BCE_loss(pred2, custom_replace(y, on_zero=1., on_non_zero=0.).float())
+			# loss2 = triplet_loss(emb_anchor, emb_pos, emb_neg, distance_metric='euclidean_normalized')
+			# loss = loss1 + loss2
+			loss.backward()
 
-		optimizer.step()
-		optimizer.zero_grad()
+			optimizer.step()
+			optimizer.zero_grad()
 
-		y_true.append(y.detach().cpu())
-		y_pred.append(pred.detach().cpu())
+			y_true.append(y.detach().cpu())
+			y_pred.append(pred.detach().cpu())
+
+			bar.set_description('Train')
+			bar.set_postfix(lr=get_lr(optimizer), loss=loss.item())
+			bar.update(1)
+
+			loss1_list.append(loss.item())
+			# loss2_list.append(loss2.item())
+			COS = nn.CosineSimilarity(dim=1, eps=1e-6)
+			cos1_list.append(torch.mean(COS(emb_anchor, emb_neg)).item())
+			cos2_list.append(torch.mean(COS(emb_anchor, emb_pos)).item())
 
 	y_true = torch.cat(y_true, dim=0)
 	y_pred = torch.cat(y_pred, dim=0)
+	print('loss1 (cls): {}, loss2 (emb): {}'.format(np.mean(np.array(loss1_list)), None))
+	print('cos1 (anchor-neg): {}, cos2 (anchor-pos): {}'.format(np.mean(np.array(cos1_list)), np.mean(np.array(cos2_list))))
 	return y_true, y_pred
 
 def eval(model, device, loader, batch_size, num_points): 
@@ -63,35 +96,39 @@ def eval(model, device, loader, batch_size, num_points):
 	y_true = []
 	y_pred = []
 	smiles_list = []
-	id_list = []
+	cos1_list = []
+	cos2_list = []
 	for _, batch in enumerate(tqdm(loader, desc="Iteration")):
-		mol_id, smiles_iso, x, mask, y = batch
-		x = x.to(device).to(torch.float32)
-		x = x.permute(0, 2, 1)
-		mask = mask.to(device).to(torch.float32)
+		smiles_iso, smiles, pos, neg, anchor, y = batch
+		pos = pos.to(device).to(torch.float32)
+		pos = pos.permute(0, 2, 1)
+		neg = neg.to(device).to(torch.float32)
+		neg = neg.permute(0, 2, 1)
+		anchor = anchor.to(device).to(torch.float32)
+		anchor = anchor.permute(0, 2, 1)
 		y = y.to(device)
 
-		idx_base = torch.arange(0, 2, device=device).view(-1, 1, 1) * num_points
+		idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
 		with torch.no_grad(): 
-			pred = model(x, None, idx_base)
+			emb_pos, pred = model(pos, idx_base)
+			emb_neg, _ = model(neg, idx_base)
+			emb_anchor, _ = model(anchor, idx_base)
+			# print('pred', pred.size())
+			# print('y', y.size())
 
 		y_true.append(y.detach().cpu())
 		y_pred.append(pred.detach().cpu())
 		smiles_list.extend(smiles_iso)
-		id_list.extend(mol_id)
+
+		COS = nn.CosineSimilarity(dim=1, eps=1e-6)
+		cos1_list.append(torch.mean(COS(emb_anchor, emb_neg)).item())
+		cos2_list.append(torch.mean(COS(emb_anchor, emb_pos)).item())
 
 	y_true = torch.cat(y_true, dim=0) 
 	y_pred = torch.cat(y_pred, dim=0)
-	return id_list, smiles_list, y_true, y_pred
-
-def batch_filter(supp): 
-	for mol in supp: # remove empty molecule
-		if mol is None:
-			continue
-		if len(Chem.MolToMolBlock(mol).split("\n")) <= 6: 
-			continue
-		yield mol
+	print('cos1 (anchor-neg): {}, cos2 (anchor-pos): {}'.format(np.mean(np.array(cos1_list)), np.mean(np.array(cos2_list))))
+	return smiles_list, y_true, y_pred
 
 
 
@@ -126,35 +163,34 @@ if __name__ == "__main__":
 		config = yaml.load(f, Loader=yaml.FullLoader)
 	
 	device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
-	model = MolNet_CSP(config['model_para'], args.device).to(device)
+	model = MolNet_CSP(config['model_para'], args.device, out_emb=True).to(device)
 	num_params = sum(p.numel() for p in model.parameters())
 	# print(f'{str(model)} #Params: {num_params}')
 	print('#Params: {}'.format(num_params))
 	
 	print("Loading the data...")
-	supp = Chem.SDMolSupplier(config['paths']['train_data'])
-	train_set = ChiralityDataset_EO([item for item in batch_filter(supp)], 
+	train_set = ChiralityDataset_EO(config['paths']['train_data'], 
 								num_points=config['model_para']['num_atoms'])
 	train_loader = DataLoader(train_set,
 								batch_size=config['train_para']['batch_size'],
 								num_workers=config['train_para']['num_workers'],
-								drop_last=True)
+								drop_last=True,
+								shuffle=True)
+	print('Load {} training data from {}.'.format(len(train_set), config['paths']['train_data']))
 
-	supp = Chem.SDMolSupplier(config['paths']['valid_data'])
-	valid_set = ChiralityDataset_EO([item for item in batch_filter(supp)], 
+	valid_set = ChiralityDataset_EO(config['paths']['valid_data'], 
 								num_points=config['model_para']['num_atoms'])
 	valid_loader = DataLoader(valid_set,
-								batch_size=2, 
+								batch_size=1, 
 								num_workers=config['train_para']['num_workers'],
-								drop_last=True)
+								drop_last=True,
+								shuffle=True)
 	print('Load {} test data from {}.'.format(len(valid_set), config['paths']['valid_data']))
 	
-	optimizer = optim.Adam(model.parameters(), 
-							lr=config['train_para']['lr'], 
-							weight_decay=config['train_para']['weight_decay'])
-	scheduler = MultiStepLR(optimizer, 
-							milestones=config['train_para']['scheduler']['milestones'], 
-							gamma=config['train_para']['scheduler']['gamma'])
+	optimizer = optim.AdamW(model.parameters(), lr=config['train_para']['lr'], weight_decay=1e-5)
+	# optimizer = optim.SGD(model.parameters(), lr=config['train_para']['lr'], weight_decay=1e-5, momentum=0.5)
+	scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10)
+
 	best_valid_auc = 0
 	best_valid_acc = 0
 	
@@ -183,7 +219,7 @@ if __name__ == "__main__":
 	if args.log_dir != '':
 		writer = SummaryWriter(log_dir=args.log_dir)
 
-	early_stop_step = 10
+	early_stop_step = 40
 	early_stop_patience = 0
 	for epoch in range(1, config['train_para']['epochs'] + 1): 
 		print("\n=====Epoch {}".format(epoch))
@@ -192,17 +228,25 @@ if __name__ == "__main__":
 		y_true, y_pred = train(model, device, train_loader, optimizer, 
 								config['train_para']['batch_size'], 
 								config['model_para']['num_atoms'])
-		train_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
-		y_pred_binary = torch.where(y_pred > 0.5, 1., 0.)
+		print(y_true[:8])
+		print(y_pred[:8])
+		if config['model_para']['out_channels'] == 1: 
+			y_pred_binary = torch.where(y_pred > 0.5, 1., 0.)
+		else: 
+			y_pred_binary = torch.argmax(y_pred, dim=1)
+		train_auc = roc_auc_score(y_true, y_pred, multi_class='ovr',)
 		train_acc = accuracy_score(y_true, y_pred_binary)
 
 		print('Evaluating...')
-		id_list, smiles_list, y_true, y_pred = eval(model, device, valid_loader, 
-														config['train_para']['batch_size'], 
-														config['model_para']['num_atoms'])
-		
-		valid_auc = roc_auc_score(np.array(y_true), y_pred, multi_class='ovr',)
-		y_pred_binary = torch.where(y_pred > 0.5, 1., 0.)
+		smiles_list, y_true, y_pred = eval(model, device, valid_loader, 1, 
+											config['model_para']['num_atoms'])
+		print(y_true[:8])
+		print(y_pred[:8])
+		if config['model_para']['out_channels'] == 1:
+			y_pred_binary = torch.where(y_pred > 0.5, 1., 0.)
+		else:
+			y_pred_binary = torch.argmax(y_pred, dim=1)
+		valid_auc = roc_auc_score(y_true, y_pred, multi_class='ovr',)
 		valid_acc = accuracy_score(y_true, y_pred_binary)
 		
 		print("Train ACC: {} Train AUC: {}\nValid ACC: {} Valid AUC: {}\n".format(train_acc, train_auc, valid_acc, valid_auc))
@@ -211,8 +255,8 @@ if __name__ == "__main__":
 			writer.add_scalar('valid/auc', valid_auc, epoch)
 			writer.add_scalar('train/auc', train_auc, epoch)
 
-		if (not np.isnan(valid_auc) and valid_auc > best_valid_auc) or \
-				(np.isnan(valid_auc) and valid_acc >= best_valid_acc): 
+		# if valid_auc > best_valid_auc or valid_acc >= best_valid_acc:
+		if valid_auc > best_valid_auc: 
 			best_valid_acc = valid_acc
 			best_valid_auc = valid_auc
 			if args.checkpoint != '':
@@ -225,7 +269,8 @@ if __name__ == "__main__":
 			early_stop_patience += 1
 			print('Early stop count: {}/{}'.format(early_stop_patience, early_stop_step))
 
-		scheduler.step()
+		# scheduler.step()
+		scheduler.step(valid_auc) # ReduceLROnPlateau
 		print('Best ACC so far: {}'.format(best_valid_acc))
 		print('Best AUC so far: {}'.format(best_valid_auc))
 
@@ -238,15 +283,49 @@ if __name__ == "__main__":
 
 	if args.result_path != '':
 		print("Load the best checkpoints...")
-		model.load_state_dict(torch.load(checkpoint_path, map_location=device)['model_state_dict'])
+		model.load_state_dict(torch.load(args.checkpoint, map_location=device)['model_state_dict'])
 
-		id_list_test, smiles_list_test, y_true_test, y_pred_test = eval(model, device, valid_loader, 1, 
-														config_model_elution_order['num_atoms'])
-		y_pred_test_binary = torch.where(y_pred_test > 0.5, 1., 0.)
-		test_res = {'SMILES': smiles_list, 'True': y_true, 
-					'Pred Final': y_pred_test_binary, 
-					'Pred': [';'.join(p.astype('str')) for p in y_pred_test.detach().numpy()]}
+		print("Inference on test set:")
+		smiles_list_test, y_true_test, y_pred_test = eval(model, device, valid_loader, 1, 
+														config['model_para']['num_atoms'])
+		if config['model_para']['out_channels'] == 1:
+			y_pred_test_binary = torch.where(y_pred_test > 0.5, 1., 0.)
+			test_res = {'SMILES': smiles_list, 'True': y_true, 
+						'Pred Final': y_pred_test_binary.squeeze().tolist(), 
+						'Pred': y_pred_test.squeeze().tolist()}
+		else:
+			y_pred_test_binary = torch.argmax(y_pred_test, dim=1)
+			y_pred_out = []
+			for y in y_pred_test:
+				y_pred_out.append(','.join([str(i) for i in y.tolist()]))
+			test_res = {'SMILES': smiles_list_test, 'True': y_true_test, 
+						'Pred Final': y_pred_test_binary.squeeze().tolist(), 
+						'Pred': y_pred_out}
 		df_test = pd.DataFrame.from_dict(test_res)
 		df_test.to_csv(args.result_path)
+		print('Save the results to {}'.format(args.result_path))
 
+		print("Inference on training set:")
+		train_loader = DataLoader(train_set,
+								batch_size=1,
+								num_workers=config['train_para']['num_workers'],
+								drop_last=True)
+		smiles_list_train, y_true_train, y_pred_train = eval(model, device, train_loader, 1, 
+															config['model_para']['num_atoms'])
+		if config['model_para']['out_channels'] == 1: 
+			y_pred_train_binary = torch.where(y_pred_train > 0.5, 1., 0.)
+			train_res = {'SMILES': smiles_list_train, 'True': y_true_train, 
+						'Pred Final': y_pred_train_binary.squeeze().tolist(), 
+						'Pred': y_pred_train.squeeze().tolist()}
+		else:
+			y_pred_train_binary = torch.argmax(y_pred_train, dim=1)
+			y_pred_out = []
+			for y in y_pred_train:
+				y_pred_out.append(','.join([str(i) for i in y.tolist()]))
+			train_res = {'SMILES': smiles_list_train, 'True': y_true_train, 
+						'Pred Final': y_pred_train_binary.squeeze().tolist(), 
+						'Pred': y_pred_out}
+		df_train = pd.DataFrame.from_dict(train_res)
+		df_train.to_csv(args.result_path.replace('.csv', '_train.csv'))
+		print('Save the results to {}'.format(args.result_path.replace('.csv', '_train.csv')))
 	

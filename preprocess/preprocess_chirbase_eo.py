@@ -6,16 +6,81 @@ LastEditTime: 2022-11-22 23:35:52
 import os
 import argparse
 import pandas as pd
+pd.set_option('display.max_columns', None)
 import pprint
 from tqdm import tqdm
+tqdm.pandas()
+import numpy as np
+import pickle
+import random 
 
 from rdkit import Chem
 # suppress rdkit warning
 from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
-from rdkit.Chem import AllChem
+from rdkit.Chem import AllChem, rdMolAlign, PandasTools, rdMolTransforms
+from rdkit.Chem.Draw import rdDepictor
 
-from utils import ATOM_LIST, convert2cls
+from utils import ATOM_LIST, create_X
+
+def find_pos(index, max_index): 
+	remainder = index % 2
+	candidate_indexes = [idx for i, idx in enumerate(range(max_index)) if i % 2 == remainder]
+	return random.choice(candidate_indexes)
+
+def gen_conf(smiles, conf_type):
+	if conf_type == 'etkdg': 
+		mol = Chem.MolFromSmiles(smiles)
+		if mol == None: return None
+		mol_from_smiles = Chem.AddHs(mol)
+		AllChem.EmbedMolecule(mol_from_smiles)
+
+	elif conf_type == 'etkdgv3': 
+		mol = Chem.MolFromSmiles(smiles)
+		if mol == None: return None
+		mol_from_smiles = Chem.AddHs(mol)
+		AllChem.EmbedMolecule(mol_from_smiles, AllChem.ETKDGv3()) 
+
+	elif conf_type == '2d':
+		mol = Chem.MolFromSmiles(smiles)
+		if mol == None: return None
+		mol_from_smiles = Chem.AddHs(mol)
+		rdDepictor.Compute2DCoords(mol_from_smiles)
+
+	elif conf_type == 'omega':
+		# print("Is GPU ready? (True/False)", oeomega.OEOmegaIsGPUReady())
+		mol_from_smiles = oechem.OEMol()
+		oechem.OEParseSmiles(mol_from_smiles, smiles)
+		oechem.OESuppressHydrogens(mol_from_smiles)
+		
+		# First we set up Omega
+		omega = oeomega.OEOmega() 
+		omega.SetMaxConfs(1) # Only generate one conformer for our molecule
+		omega.SetStrictStereo(True) # Set to False to pick random stereoisomer if stereochemistry is not specified (not relevant here)
+		omega.SetStrictAtomTypes(False) # Be a little loose about atom typing to ensure parameters are available to omega for all molecules
+		omega(mol_from_smiles)
+		
+	else: 
+		raise ValueError("Undifined conformer type: {}".format(conf_type))
+	return mol_from_smiles
+
+def align_conf(df): 
+	assert len(df) == 2, '2 molecules are needed to be aligned, but {} are given.'.format(len(df))
+	mol1 = df.iloc[0]['Mol']
+	mol2 = df.iloc[1]['Mol']
+	# conf11 = mol1.GetConformer().GetPositions()
+	# conf12 = mol2.GetConformer().GetPositions()
+	rmsd, trans = rdMolAlign.GetAlignmentTransform(mol1, mol2)
+	rdMolTransforms.TransformConformer(mol1.GetConformer(0), trans) # tranform the mol1 as alignment
+	# conf21 = mol1.GetConformer().GetPositions()
+	# conf22 = mol2.GetConformer().GetPositions()
+	# print(np.array_equal(conf11, conf21), np.array_equal(conf12, conf22))
+
+	# change the value in original df
+	df.at[0, 'Mol'] = mol1
+	df.at[1, 'Mol'] = mol2
+	df['Align_RMSD'] = rmsd
+	return df
 
 '''
 preprocess: 
@@ -33,13 +98,15 @@ if __name__ == '__main__':
 						help='path to input data (elution order)')
 	parser.add_argument('--input', type=str, required=True, 
 						help='path to input data (original data)')
-	parser.add_argument('--conf_type', type=str, default='etkdg', 
-                        choices=['2d', 'etkdg', 'etkdgv3', 'omega'], 
-                        help='conformation type')
+	parser.add_argument('--conf_type', type=str, default='etkdgv3', 
+						choices=['2d', 'etkdg', 'etkdgv3', 'omega'], 
+						help='conformation type')
 	parser.add_argument('--csp_setting', type=str, required=True, 
 						help='path to csp settings')
 	parser.add_argument('--output', type=str, required=True, 
 						help='path to output data')
+	parser.add_argument('--test_ratio', type=float, default = 0.1,
+						help='test ratio')
 	args = parser.parse_args()
 
 	# -------------------------------------
@@ -59,16 +126,17 @@ if __name__ == '__main__':
 		if mol_block_length < mol.GetNumAtoms(): 
 			print(mol_block_length, '<', mol.GetNumAtoms())
 			continue
-		if mol.GetNumAtoms() > 100: # --num_atoms 100
+		if mol.GetNumAtoms() >= 100: # --num_atoms 100
 			print('Too many atoms')
 			continue
 
 		flag_remove = False
-		for atom in mol.GetAtoms():
+		for atom in mol.GetAtoms(): 
 			if atom.GetSymbol() not in ATOM_LIST:
 				flag_remove = True
 				print('Unlabeled atom: {}'.format(atom.GetSymbol()))
 				break
+
 		if flag_remove: 
 			continue
 
@@ -78,10 +146,10 @@ if __name__ == '__main__':
 		df_dict['SMILES'].append(smiles)
 		df_dict['SMILES_iso'].append(smiles_iso)
 		df_dict['CSP_NO'].append(str(mol.GetProp('csp_no')))
-		df_dict['Elution_Order'].append(int(mol.GetProp('class')))
+		df_dict['Elution_Order'].append(str(int(mol.GetProp('class'))))
 
 	df = pd.DataFrame.from_dict(df_dict)
-	df = df.drop_duplicates()
+	df = df.drop_duplicates(subset=['SMILES_iso', 'CSP_NO']) # same smiles_iso, same csp_no but diff elution order
 	
 	# -------------------------------------
 	# data without enantiomers (k2/k1)
@@ -103,7 +171,8 @@ if __name__ == '__main__':
 		df_org_dict['K2/K1'].append(round(float(mol.GetProp('k2/k1')), 4))
 
 	df_org = pd.DataFrame.from_dict(df_org_dict)
-	df_org = df_org.drop_duplicates()
+	df_org = df_org.sort_values(['SMILES', 'CSP_NO', 'K2/K1'], ascending=False).drop_duplicates(['SMILES', 'CSP_NO'], keep='first').sort_index()
+	print(df_org['K2/K1'].min(), df_org['K2/K1'].max())
 
 	# -------------------------------------
 	# csp settings (csp category)
@@ -121,72 +190,74 @@ if __name__ == '__main__':
 	# -------------------------------------
 	# final
 	# -------------------------------------
+	# test
+	# df = df[:100]
+
 	# merge k2/k1, csp_category, and elution order together
 	df = df.merge(df_org, left_on=['SMILES', 'CSP_NO'], right_on=['SMILES', 'CSP_NO'])
-	df['CSP_Category'] = df['CSP_NO'].apply(lambda x: CSP_DICT[x][1])
+	df['CSP_Category'] = df['CSP_NO'].apply(lambda x: int(CSP_DICT[x][1]))
 
-	# convert dataframe into mol_list and generate conformations
-	out_mols = []
+	# convert dataframe into mol_list and generate conformations 
 	print('Generating conformations...')
-	for idx, row in tqdm(df.iterrows(), total=df.shape[0]): 
-		smiles = row['SMILES_iso']
+	df = df.groupby('SMILES').filter(lambda x: len(x) == 2)
+	# generate conformations
+	df['Mol'] = df['SMILES_iso'].progress_apply(lambda x: gen_conf(x, args.conf_type))
+	df['Conf_Number'] = df['Mol'].apply(lambda x: int(x.GetNumConformers()))
+	df = df[df['Conf_Number'] >= 1]
+	# align enantiomers
+	print('Align enantiomers...')
+	df = df.groupby(['SMILES'], as_index=False).progress_apply(align_conf)
+	# remove nan
+	df = df.dropna()
+	df.reset_index(inplace=True, drop=True)
+	df.reset_index(inplace=True)
+	df['ena_index'] = df['index'].progress_apply(lambda x: x//2*2 + (x+1)%2)
+	df['pos_index'] = df['index'].progress_apply(lambda x: find_pos(x, len(df)))
+	print(df.head())
+	
+	# save to csv
+	df[['index', 'ena_index', 'pos_index', 'SMILES', 'SMILES_iso', 'Elution_Order']].to_csv(args.output.replace('.sdf', '.csv'))
+	print('Save results to {}'.format(args.output.replace('.sdf', '.csv')))
+	
+	# save to sdf
+	# print('Writing {} data to {}'.format(len(df), args.output))
+	# PandasTools.WriteSDF(df, args.output, molColName='Mol', properties=list(df.columns))
+	# print('Done!')
 
-		if args.conf_type == 'etkdg': 
-			mol = Chem.MolFromSmiles(smiles)
-			if mol == None: continue
-			mol_from_smiles = Chem.AddHs(mol)
-			AllChem.EmbedMolecule(mol_from_smiles)
+	# save to pkl
+	data_pkl = []
+	for mol in df['Mol'].tolist(): 
+		x = create_X(mol, num_points=100)
+		data_pkl.append({'anchor': x})
+	for idx, row in df.iterrows():
+		data_pkl[idx]['smiles_iso'] = row['SMILES_iso']
+		data_pkl[idx]['smiles'] = row['SMILES']
+		data_pkl[idx]['neg'] = data_pkl[row['ena_index']]['anchor']
+		data_pkl[idx]['pos'] = data_pkl[row['pos_index']]['anchor']
+		data_pkl[idx]['k2/k1'] = float(row['K2/K1'])
+		data_pkl[idx]['csp_category'] = int(row['CSP_Category'])
+		data_pkl[idx]['elution_order'] = int(row['Elution_Order'])
 
-		elif args.conf_type == 'etkdgv3': 
-			mol = Chem.MolFromSmiles(smiles)
-			if mol == None: continue
-			mol_from_smiles = Chem.AddHs(mol)
-			AllChem.EmbedMolecule(mol_from_smiles, AllChem.ETKDGv3()) 
+	# split the data by smiles
+	smiles_list = list(set(df['SMILES'].tolist()))
+	Ltest = np.random.choice(smiles_list, int(len(smiles_list)*args.test_ratio), replace=False)
+	print("Get {} training compounds, {} test compounds".format(len(smiles_list)-len(Ltest), len(Ltest)))
 
-		elif args.conf_type == '2d':
-			mol = Chem.MolFromSmiles(smiles)
-			if mol == None: continue
-			mol_from_smiles = Chem.AddHs(mol)
-			rdDepictor.Compute2DCoords(mol_from_smiles)
+	train_data_pkl = []
+	test_data_pkl = []
+	for d in data_pkl: 
+		if d['smiles'] in Ltest: 
+			test_data_pkl.append(d)
+		else:
+			train_data_pkl.append(d)
 
-		elif args.conf_type == 'omega':
-			# print("Is GPU ready? (True/False)", oeomega.OEOmegaIsGPUReady())
-			mol_from_smiles = oechem.OEMol()
-			oechem.OEParseSmiles(mol_from_smiles, smiles)
-			oechem.OESuppressHydrogens(mol_from_smiles)
-			
-			# First we set up Omega
-			omega = oeomega.OEOmega() 
-			omega.SetMaxConfs(1) # Only generate one conformer for our molecule
-			omega.SetStrictStereo(False) # Set to False to pick random stereoisomer if stereochemistry is not specified (not relevant here)
-			omega.SetStrictAtomTypes(False) # Be a little loose about atom typing to ensure parameters are available to omega for all molecules
-			omega(mol_from_smiles)
-			
-		else: 
-			raise ValueError("Undifined conformer type: {}".format(args.conf_type))
-
-		# append id, conformer, property, adduct
-		# rdkit
-		if args.conf_type == 'etkdg' or args.conf_type == 'etkdgv3' or args.conf_type == '2d': 
-			mol_from_smiles.SetProp('id', str(idx))
-			mol_from_smiles.SetProp('smiles', str(row['SMILES_iso']))
-			mol_from_smiles.SetProp('k2/k1', str(row['K2/K1']))
-			mol_from_smiles.SetProp('mobile_phase_category', str(row['CSP_Category']))
-			mol_from_smiles.SetProp('elution_order', str(row['Elution_Order']))
-			out_mols.append(mol_from_smiles)
-		# oechem
-		else: 
-			oechem.OESetSDData(mol_from_smiles, 'id', str(idx))
-			oechem.OESetSDData(mol_from_smiles, 'smiles', str(row['SMILES_iso']))
-			oechem.OESetSDData(mol_from_smiles, 'k2/k1', str(row['K2/K1']))
-			oechem.OESetSDData(mol_from_smiles, 'mobile_phase_category', str(row['CSP_Category']))
-			oechem.OESetSDData(mol_from_smiles, 'elution_order', str(row['Elution_Order']))
-			out_mols.append(mol_from_smiles)
-
-	print('Writing {} data to {}'.format(len(out_mols), args.output))
-	w = Chem.SDWriter(args.output)
-	for m in out_mols:
-		w.write(m)
+	out_path = args.output.replace('.sdf', '_train.pkl')
+	with open(out_path, 'wb') as f: 
+		pickle.dump(train_data_pkl, f)
+		print('Save {}'.format(out_path))
+	out_path = args.output.replace('.sdf', '_test.pkl')
+	with open(out_path, 'wb') as f: 
+		pickle.dump(test_data_pkl, f)
+		print('Save {}'.format(out_path))
 	print('Done!')
-
 	

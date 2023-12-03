@@ -40,15 +40,14 @@ def inference(model, device, loader, num_points):
 	id_list = []
 	mbs = []
 	for _, batch in enumerate(tqdm(loader, desc="Iteration")): 
-		mol_id, smiles_iso, mb, x, mask = batch
+		mol_id, smiles_iso, mb, x = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
-		mask = mask.to(device).to(torch.float32)
 
 		idx_base = torch.arange(0, TEST_BATCH_SIZE, device=device).view(-1, 1, 1) * num_points
 
 		with torch.no_grad(): 
-			pred = model(x, None, idx_base)
+			pred = model(x, idx_base)
 
 		y_pred.append(pred.view(TEST_BATCH_SIZE, -1).detach().cpu())
 		smiles_list.extend(smiles_iso)

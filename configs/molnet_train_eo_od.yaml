@@ -2,12 +2,12 @@ model: 'molnet'
 dataset: 'chirality'
 
 paths: 
-  train_data: './data/ChirBase_eo/exp/ad_sr_clean_train.pkl' 
-  valid_data: './data/ChirBase_eo/exp/ad_sr_clean_test.pkl'
+  train_data: './data/ChirBase_eo/exp/od_sr_clean_train.pkl' 
+  valid_data: './data/ChirBase_eo/exp/od_sr_clean_test.pkl'
 
 model_para: 
   in_channels: 22
-  num_atoms: 100
+  num_atoms: 200
   encoder_layers: [64, 64, 128, 256, 512]
   emb_dim: 1024
   k: 5
@@ -16,7 +16,7 @@ model_para:
   out_channels: 1
 
 train_para: 
-  batch_size: 128
+  batch_size: 32
   epochs: 500
   lr: 0.00001
   num_workers: 0
@@ -24,3 +24,4 @@ train_para:
   scheduler: 
     milestones: [10, 20, 40]
     gamma: 0.5
+    

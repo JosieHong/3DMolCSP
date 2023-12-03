@@ -14,77 +14,76 @@ from typing import Tuple
 # decoder
 # ------------------------------------------------------
 class  FCResBlock(nn.Module): 
-    def __init__(self, in_dim, out_dim, dropout=None): 
-        super(FCResBlock, self).__init__()
-        self.in_dim = in_dim
-        self.out_dim = out_dim
+	def __init__(self, in_dim, out_dim, dropout=None): 
+		super(FCResBlock, self).__init__()
+		self.in_dim = in_dim
+		self.out_dim = out_dim
 
-        self.linear1 = nn.Linear(in_dim, out_dim, bias=False)
-        self.bn1 = nn.LayerNorm(out_dim)
+		self.linear1 = nn.Linear(in_dim, out_dim, bias=False)
+		self.bn1 = nn.BatchNorm1d(out_dim)
 
-        self.linear2 = nn.Linear(out_dim, out_dim)
-        self.bn2 = nn.LayerNorm(out_dim)
+		self.linear2 = nn.Linear(out_dim, out_dim)
+		self.bn2 = nn.BatchNorm1d(out_dim)
 
-        self.linear3 = nn.Linear(out_dim, out_dim)
-        self.bn3 = nn.LayerNorm(out_dim)
+		self.linear3 = nn.Linear(out_dim, out_dim)
+		self.bn3 = nn.BatchNorm1d(out_dim)
 
-        self.dp = nn.Dropout(dropout) if dropout != None else None 
+		self.dp = nn.Dropout(dropout) if dropout != None else None 
 
-        self._reset_parameters()
+		self._reset_parameters()
 
-    def _reset_parameters(self): 
-        for m in self.modules(): 
-            if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Linear)):
-                nn.init.kaiming_normal_(m.weight, a=0.2, mode='fan_in', nonlinearity='leaky_relu')
-            
-            elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.GroupNorm)): 
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
+	def _reset_parameters(self): 
+		for m in self.modules(): 
+			if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Linear)):
+				nn.init.kaiming_normal_(m.weight, a=0.2, mode='fan_in', nonlinearity='leaky_relu')
+			
+			elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.GroupNorm, nn.LayerNorm)): 
+				nn.init.constant_(m.weight, 1)
+				nn.init.constant_(m.bias, 0)
 
-    def forward(self, x):
-        identity = x
-        
-        x = self.bn1(self.linear1(x))
-        x = F.leaky_relu(x, negative_slope=0.2)
-        x = self.bn2(self.linear2(x))
-        x = F.leaky_relu(x, negative_slope=0.2)
-        x = self.bn3(self.linear3(x))
-        
-        x = x + F.interpolate(identity.unsqueeze(1), size=x.size()[1]).squeeze()
-        
-        x = F.leaky_relu(x, negative_slope=0.2)
-        x = self.dp(x) if self.dp != None else x
-        return x
+	def forward(self, x):
+		identity = x
+		
+		x = self.bn1(self.linear1(x))
+		x = F.leaky_relu(x, negative_slope=0.2)
+		x = self.bn2(self.linear2(x))
+		x = F.leaky_relu(x, negative_slope=0.2)
+		x = self.bn3(self.linear3(x))
+		
+		x = x + F.interpolate(identity.unsqueeze(1), size=x.size()[1]).squeeze()
 
-    def __repr__(self):
-        return self.__class__.__name__ + ' (' + str(self.in_dim) + ' -> ' + str(self.out_dim) + ')'
+		x = self.dp(x) if self.dp != None else x
+		return x
+
+	def __repr__(self):
+		return self.__class__.__name__ + ' (' + str(self.in_dim) + ' -> ' + str(self.out_dim) + ')'
 
 
 # ------------------------------------------------------
 # encoder
 # ------------------------------------------------------
 class FCResDecoder(nn.Module): 
-    def __init__(self, in_dim, layers, out_dim, dropout): 
-        super(FCResDecoder, self).__init__()
-        self.blocks = nn.ModuleList([FCResBlock(in_dim=in_dim, out_dim=layers[0])])
-        for i in range(len(layers)-1): 
-            if len(layers) - i > 3:
-                self.blocks.append(FCResBlock(in_dim=layers[i], out_dim=layers[i+1]))
-            else:
-                self.blocks.append(FCResBlock(in_dim=layers[i], out_dim=layers[i+1], dropout=dropout))
+	def __init__(self, in_dim, layers, out_dim, dropout): 
+		super(FCResDecoder, self).__init__()
+		self.blocks = nn.ModuleList([FCResBlock(in_dim=in_dim, out_dim=layers[0])])
+		for i in range(len(layers)-1): 
+			if len(layers) - i > 3:
+				self.blocks.append(FCResBlock(in_dim=layers[i], out_dim=layers[i+1]))
+			else:
+				self.blocks.append(FCResBlock(in_dim=layers[i], out_dim=layers[i+1], dropout=dropout))
 
-        self.fc = nn.Linear(layers[-1], out_dim)
-        
-        self._reset_parameters()
+		self.fc = nn.Linear(layers[-1], out_dim)
+		
+		self._reset_parameters()
 
-    def _reset_parameters(self): 
-        nn.init.kaiming_normal_(self.fc.weight, a=0.2, mode='fan_in', nonlinearity='leaky_relu')
+	def _reset_parameters(self): 
+		nn.init.kaiming_normal_(self.fc.weight, a=0.2, mode='fan_in', nonlinearity='leaky_relu')
 
-    def forward(self, x):
-        for block in self.blocks:
-            x = block(x)
+	def forward(self, x):
+		for block in self.blocks:
+			x = block(x)
 
-        return self.fc(x)
+		return self.fc(x)
 
 class MolConv(nn.Module):
 	def __init__(self, in_dim, out_dim, k, remove_xyz=False):
@@ -97,16 +96,22 @@ class MolConv(nn.Module):
 		self.dist_ff = nn.Sequential(nn.Conv2d(1, 1, kernel_size=1, bias=False),
 								nn.BatchNorm2d(1),
 								nn.Sigmoid())
-		self.gm2m_ff = nn.Sequential(nn.Conv2d(k, 1, kernel_size=1, bias=False),
-								nn.BatchNorm2d(1),
-								nn.Sigmoid())
+		# self.gm2m_ff = nn.Sequential(nn.Conv2d(k, 1, kernel_size=1, bias=False),
+		# 						nn.BatchNorm2d(1),
+		# 						nn.Sigmoid())
 
 		if remove_xyz: 
-			self.update_ff = nn.Sequential(nn.Conv2d(in_dim-3, out_dim, kernel_size=1, bias=False),
+			self.center_ff = nn.Sequential(nn.Conv2d(in_dim-3, in_dim+k-3, kernel_size=1, bias=False),
+								nn.BatchNorm2d(in_dim+k-3),
+								nn.Sigmoid())
+			self.update_ff = nn.Sequential(nn.Conv2d(in_dim+k-3, out_dim, kernel_size=1, bias=False),
 								nn.BatchNorm2d(out_dim),
 								nn.LeakyReLU(negative_slope=0.02))
 		else:
-			self.update_ff = nn.Sequential(nn.Conv2d(in_dim, out_dim, kernel_size=1, bias=False),
+			self.center_ff = nn.Sequential(nn.Conv2d(in_dim, in_dim+k, kernel_size=1, bias=False),
+								nn.BatchNorm2d(in_dim+k),
+								nn.Sigmoid())
+			self.update_ff = nn.Sequential(nn.Conv2d(in_dim+k, out_dim, kernel_size=1, bias=False),
 								nn.BatchNorm2d(out_dim),
 								nn.LeakyReLU(negative_slope=0.02))
 
@@ -130,10 +135,12 @@ class MolConv(nn.Module):
 		feat_c: torch.Size([batch_size, in_dim, point_num, k]) 
 		feat_n: torch.Size([batch_size, in_dim, point_num, k])
 		'''
-		w1 = self.dist_ff(dist)
-		w2 = self.gm2m_ff(gm2)
-		
-		feat = torch.mul(w1, w2) * feat_n + (1 - torch.mul(w1, w2)) * feat_c
+		feat_n = torch.cat((feat_n, gm2), dim=1) # torch.Size([batch_size, in_dim+k, point_num, k])
+		feat_c = self.center_ff(feat_c)
+
+		w = self.dist_ff(dist)
+
+		feat = w * feat_n + feat_c
 		feat = self.update_ff(feat)
 		feat = feat.mean(dim=-1, keepdim=False)
 		return feat
@@ -163,6 +170,7 @@ class MolConv(nn.Module):
 		# gram matrix
 		gm_matrix = torch.matmul(graph_feat, graph_feat.permute(0, 1, 3, 2))
 		# print('_double_gram_matrix (gm_matrix):', torch.any(torch.isnan(gm_matrix)))
+		# gm_matrix = F.normalize(gm_matrix, dim=1) 
 
 		# double gram matrix
 		sub_feat = gm_matrix[:, :, :, 0].unsqueeze(3)
@@ -198,7 +206,7 @@ class Encoder(nn.Module):
 			else:
 				self.hidden_layers.append(MolConv(in_dim=layers[i-1], out_dim=layers[i], k=k, remove_xyz=False))
 		
-		self.merge = nn.Sequential(nn.Linear(emb_dim*2, emb_dim), 
+		self.merge = nn.Sequential(nn.Linear(emb_dim, emb_dim), 
 								   nn.BatchNorm1d(emb_dim), 
 								   nn.LeakyReLU(negative_slope=0.2))
 		self._reset_parameters()
@@ -234,8 +242,8 @@ class Encoder(nn.Module):
 		if x.size(0) == 1: # batch size is 1
 			p1 = p1.view(1, -1)
 			p2 = p2.view(1, -1)
-		x = torch.cat((p1, p2), 1)
-		x = self.merge(x)
+		# x = torch.cat((p1, p2), 1)
+		x = self.merge(p1 + p2)
 		return x
 
 
@@ -244,9 +252,11 @@ class Encoder(nn.Module):
 # MolNet_CSP
 # ------------------------------------------------------
 class MolNet_CSP(nn.Module): 
-	def __init__(self, args, device): 
+	def __init__(self, args, device, out_emb=False): 
 		super(MolNet_CSP, self).__init__()
 		self.num_atoms = args['num_atoms']
+		self.out_emb = out_emb
+		self.out_dim = args['out_channels']
 
 		self.encoder = Encoder(in_dim=args['in_channels'], 
 								layers=args['encoder_layers'], 
@@ -263,12 +273,10 @@ class MolNet_CSP(nn.Module):
 			self.activation = nn.Softmax(dim=1)
 
 	def forward(self, x: torch.Tensor, 
-						env: torch.Tensor, 
 						idx_base: torch.Tensor) -> torch.Tensor: 
 		'''
 		Input: 
 			x:      point set, torch.Size([batch_size, 21, num_atoms])
-			env:    experimental condiction
 			idx_base:   idx for local knn
 		'''
 		batch_size = x.size(0)
@@ -276,8 +284,19 @@ class MolNet_CSP(nn.Module):
 		x = self.encoder(x, idx_base)
 
 		# decoder
-		out = self.activation(self.decoder(x))
-		if batch_size == 1: 
-			return torch.squeeze(out).view(1, -1)
+		out = self.decoder(x)
+		out = self.activation(out)
+		
+		if batch_size == 1 and self.out_dim == 1: 
+			out = torch.squeeze(out).view(1)
+		elif batch_size == 1 and self.out_dim != 1: 
+			out = torch.squeeze(out).view(1, -1)
 		else: 
-			return torch.squeeze(out)
+			out = torch.squeeze(out)
+
+		if self.out_emb:
+			return x, out
+		else:
+			return out
+
+

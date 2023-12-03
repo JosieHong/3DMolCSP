@@ -28,7 +28,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 
 from dataset import ChiralityDataset
 from model import MolNet_CSP 
-from utils import set_seed, average_results_on_enantiomers, cls_criterion
+from utils import set_seed, average_results_on_enantiomers, CE_loss
 
 TEST_BATCH_SIZE = 1 # global variable in validation
 
@@ -49,7 +49,7 @@ def train(model, device, loader, optimizer, batch_size, num_points):
 		pred = model(x, None, idx_base)
 		# print('pred', pred.size())
 
-		loss = cls_criterion(pred, y)
+		loss = CE_loss(pred, y.float())
 		loss.backward()
 
 		optimizer.step()

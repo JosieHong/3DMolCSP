@@ -163,6 +163,7 @@ results/
 data/ChirBase/
 data/ChirBase_eo/
 data/CMRT/
+data/SRCls/
 data/compare_chirbase_cmrt.csv
 notebooks/
 *.bak

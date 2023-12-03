@@ -11,6 +11,10 @@ import torch.nn.functional as F
 import numpy as np
 import random
 
+def get_lr(optimizer):
+	for param_group in optimizer.param_groups:
+		return param_group['lr']
+
 def avg_res(preds): 
 	preds = preds.Pred.values
 	avg_preds = []
@@ -32,10 +36,41 @@ def set_seed(seed):
 	np.random.seed(seed)
 	random.seed(seed)
 
-def cls_criterion(outputs, targets): 
-	targets = torch.squeeze(targets)
-	if len(outputs.size()) == 1:
-		loss = nn.BCELoss()(outputs, targets.float())
-	else: 
-		loss = nn.CrossEntropyLoss()(outputs, targets.to(torch.int64))
+def CE_loss(y_hat, y): 
+	CE = nn.CrossEntropyLoss()
+	return CE(y_hat, y)
+
+def BCE_loss(y_hat, y): 
+	BCE = torch.nn.BCEWithLogitsLoss()
+	return BCE(y_hat, y)
+
+def MSE(y_hat, y): 
+	MSE = torch.mean(torch.square(y - y_hat))
+	return MSE
+
+def triplet_loss(z_anchor, z_positive, z_negative, margin=1.0, reduction='mean', distance_metric='euclidean'): 
+	if distance_metric == 'euclidean' or distance_metric == 'euclidean_normalized':
+		criterion = nn.TripletMarginWithDistanceLoss(distance_function=nn.PairwiseDistance(p=2.0), 
+			margin=margin, 
+			swap=False, 
+			reduction=reduction)
+	elif distance_metric == 'manhattan':
+		criterion = nn.TripletMarginWithDistanceLoss(distance_function=nn.PairwiseDistance(p=1.0), 
+			margin=margin, 
+			swap=False, 
+			reduction=reduction)
+	elif distance_metric == 'cosine':
+		criterion = nn.TripletMarginWithDistanceLoss(distance_function= lambda x, y: 1.0 - nn.functional.cosine_similarity(x, y),  
+			margin=margin, 
+			swap=False, 
+			reduction=reduction)
+	else:
+		raise Exception(f'distance metric {distance_metric} is not implemented')
+
+	if distance_metric == 'euclidean_normalized':
+		z_anchor = z_anchor / torch.linalg.norm(z_anchor + 1e-10, dim=1, keepdim=True)
+		z_positive = z_positive / torch.linalg.norm(z_positive + 1e-10, dim=1, keepdim=True)
+		z_negative = z_negative / torch.linalg.norm(z_negative + 1e-10, dim=1, keepdim=True)
+
+	loss = criterion(z_anchor, z_positive, z_negative)
 	return loss
