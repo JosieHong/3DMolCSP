@@ -28,10 +28,10 @@ pip install lxml tqdm pandas pyteomics PyYAML scikit-learn
 ```bash
 # The demo dataset is already cleaned. 
 # generate 3D conformations
-python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirobiotic_v.sdf --conf_type etkdg
+python ./preprocess/gen_conformers.py --path ./data/demo/chirobiotic_v.sdf --conf_type etkdg
 
 # (optional)
-python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirobiotic_v_etkdg.sdf --output_train ./data/ChirBase/chirobiotic_v_etkdg_train.sdf --output_test ./data/ChirBase/chirobiotic_v_etkdg_test.sdf
+python ./preprocess/random_split_sdf.py --input ./data/demo/chirobiotic_v_etkdg.sdf --output_train ./data/demo/chirobiotic_v_etkdg_train.sdf --output_test ./data/demo/chirobiotic_v_etkdg_test.sdf
 ```
 
 ### ChirBase
@@ -80,17 +80,37 @@ python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean.sdf --conf_t
 python main_chir_kfold.py --config ./configs/molnet_train_demo.yaml --k_fold 5 --csp_no 3 \
                                     --log_dir ./logs/molnet_chirality/ \
                                     --checkpoint ./check_point/demo_sc.pt \
-                                    --result_path ./results/demo_sc.csv \
+                                    --result_path ./demo/demo_sc.csv \
                                     --device 1
 
 # training from pretrained model 
 python main_chir_kfold.py --config ./configs/molnet_train_demo.yaml --k_fold 5 --csp_no 3 \
                                     --log_dir ./logs/molnet_chirality/ \
-                                    --resume_path ./check_point/molnet_agilent.pt \
+                                    --resume_path ./check_point/molnetv2_qtof_etkdgv3.pt \
                                     --transfer \
                                     --checkpoint ./check_point/demo_tl.pt \
-                                    --result_path ./results/demo_tl.csv \
+                                    --result_path ./demo/demo_tl.csv \
                                     --device 1
+```
+
+Results on demo dataset:
+
+```bash
+# --------------- Final Results of 3DMolCSP-SC --------------- #
+fold_0: acc: 0.81, auc: 0.95
+fold_1: acc: 0.90, auc: 0.99
+fold_2: acc: 0.73, auc: 0.87
+fold_3: acc: 0.81, auc: 0.96
+fold_4: acc: 0.84, auc: 0.98
+mean acc: 0.82, mean auc: 0.95
+
+# --------------- Final Results of 3DMolCSP-TL --------------- #
+fold_0: acc: 0.80, auc: 0.94
+fold_1: acc: 0.91, auc: 0.99
+fold_2: acc: 0.81, auc: 0.97
+fold_3: acc: 0.79, auc: 0.96
+fold_4: acc: 0.80, auc: 0.97
+mean acc: 0.82, mean auc: 0.97
 ```
 
 ### Exp2: Five-fold cross-validation on ChirBase

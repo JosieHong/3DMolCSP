@@ -339,5 +339,5 @@ if __name__ == "__main__":
 
 	print('\n# --------------- Final Results --------------- #')
 	for i, (acc, auc) in enumerate(zip(records['best_acc'], records['best_auc'])):
-		print('fold_{}: acc: {}, auc: {}'.format(i, acc, auc))
-	print('mean acc: {}, mean auc: {}'.format(sum(records['best_acc'])/len(records['best_acc']), sum(records['best_auc'])/len(records['best_auc'])))
+		print('fold_{}: acc: {:.2f}, auc: {:.2f}'.format(i, acc, auc))
+	print('mean acc: {:.2f}, mean auc: {:.2f}'.format(sum(records['best_acc'])/len(records['best_acc']), sum(records['best_auc'])/len(records['best_auc'])))

@@ -167,3 +167,5 @@ data/SRCls/
 data/compare_chirbase_cmrt.csv
 notebooks/
 *.bak
+vis/
+demo/
