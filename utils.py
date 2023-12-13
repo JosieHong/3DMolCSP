@@ -16,18 +16,23 @@ def get_lr(optimizer):
 		return param_group['lr']
 
 def avg_res(preds): 
-	preds = preds.Pred.values
 	avg_preds = []
-	for pred in preds:
+	for pred in preds.Pred.values:
 		avg_preds.append(pred.split(','))
 
 	avg_preds = np.array(avg_preds, dtype=np.float32)
-	avg_preds = np.average(avg_preds, axis=0)
-	return ','.join(avg_preds.astype('str'))
+	if len(avg_preds.shape) == 1: # only one configuration
+		return ','.join(avg_preds.astype('str'))
+	else: # more than one configuration, so average the prediction
+		avg_preds = np.average(avg_preds, axis=0)
+		avg_preds = F.softmax(torch.from_numpy(avg_preds), dim=0).numpy()
+		return ','.join(avg_preds.astype('str'))
 
 def average_results_on_enantiomers(df): 
-	g = df.groupby(['ID', 'SMILES', 'MB'])
-	avg_df = g.apply(avg_res).to_frame('Pred').reset_index()
+	g = df.groupby(['SMILES', 'MB'])
+	avg_df = g.apply(avg_res).to_frame('Pred')
+	avg_df = avg_df.merge(df, on=['SMILES', 'MB']).rename(columns={'Pred_x': 'Pred_avg', 'Pred_y': 'Pred'})
+	avg_df = avg_df.reset_index()
 	return avg_df
 
 def set_seed(seed): 

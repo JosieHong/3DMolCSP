@@ -44,7 +44,7 @@ def train(model, device, loader, optimizer, batch_size, num_points):
 		pred = model(x, idx_base)
 		# print('pred', pred.size())
 
-		loss = CE_loss(pred, y.float())
+		loss = CE_loss(pred, y)
 		loss.backward()
 
 		optimizer.step()
@@ -206,7 +206,7 @@ if __name__ == "__main__":
 	if args.log_dir != '':
 		writer = SummaryWriter(log_dir=args.log_dir)
 
-	early_stop_step = 10
+	early_stop_step = 5
 	early_stop_patience = 0
 	for epoch in range(1, config['train_para']['epochs'] + 1): 
 		print("\n=====Epoch {}".format(epoch))
@@ -243,7 +243,12 @@ if __name__ == "__main__":
 			best_valid_auc = valid_auc
 			if args.checkpoint != '':
 				print('Saving checkpoint...')
-				checkpoint = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(), 'best_val_auc': best_valid_auc, 'num_params': num_params}
+				checkpoint = {'epoch': epoch, 
+								'model_state_dict': model.state_dict(), 
+								'optimizer_state_dict': optimizer.state_dict(), 
+								'scheduler_state_dict': scheduler.state_dict(), 
+								'best_val_auc': best_valid_auc, 
+								'num_params': num_params}
 				torch.save(checkpoint, args.checkpoint)
 			early_stop_patience = 0
 			print('Early stop patience reset')

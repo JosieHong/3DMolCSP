@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, SubsetRandomSampler
+from torch.utils.data import DataLoader, SubsetRandomSampler, ConcatDataset
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import MultiStepLR
 import random
@@ -26,10 +26,11 @@ RDLogger.DisableLog('rdApp.*')
 from sklearn.metrics import roc_auc_score, accuracy_score
 
 from dataset import ChiralityDataset_infer
-from model import MolNet 
+from model import MolNet_CSP 
 from utils import set_seed, average_results_on_enantiomers
 
 TEST_BATCH_SIZE = 1 # global variable in inference
+TEST_NUM_WORKERS = 0 # global variable in inference
 
 
 
@@ -98,7 +99,7 @@ if __name__ == "__main__":
 		config = yaml.load(f, Loader=yaml.FullLoader)
 	
 	device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
-	model = MolNet(config['model_para'], args.device).to(device)
+	model = MolNet_CSP(config['model_para'], args.device).to(device)
 	num_params = sum(p.numel() for p in model.parameters())
 	# print(f'{str(model)} #Params: {num_params}')
 	print('#Params: {}'.format(num_params))
@@ -117,7 +118,7 @@ if __name__ == "__main__":
 	test_set = ConcatDataset([test_set, test_set_ena]) # concat two configurations' datasets
 	test_loader = DataLoader(test_set,
 								batch_size=TEST_BATCH_SIZE, 
-								num_workers=config['train_para']['num_workers'],
+								num_workers=TEST_NUM_WORKERS, 
 								drop_last=True,)
 	print('Load {} test data from {}.'.format(len(test_set), config['paths']['test_data']))
 

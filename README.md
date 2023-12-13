@@ -134,35 +134,6 @@ nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out
 
 ```bash
 nohup bash ./experiments/train_chir_etkdg_eo.sh > train_chir_etkdg_eo.out 
-
-python main_chir_emb.py --config ./configs/molnet_train_eo_ad_emb.yaml \
---checkpoint ./check_point_eo/molnet_chirbase_ad_emb.pt \
---result_path ./results_eo/molnet_chirbase_ad_emb.csv \
---device 1 
-```
-
-### ~~Exp5: Chiral configuration prediction~~
-
-```bash
-python ./preprocess/preprocess_chirbase_sr.py \
---input ./data/ChirBase/chirbase.sdf \
---output ./data/ChirBase/sr_exp/chirbase_sr_clean.sdf
-
-python main_chir_sr.py --config ./configs/molnet_train_chirbase_sr.yaml \
---checkpoint ./check_point_eo/molnet_chirbase_rs.pt \
---result_path ./results_eo/molnet_chirbase_rs.csv \
---device 1 
-```
-
-```bash
-nohup python ./preprocess/preprocess_sr.py \
---input_dir ./data/SRCls/ \
---output_dir ./data/SRCls/ > preprocess_sr.out 
-
-python main_sr.py --config ./configs/molnet_train_sr.yaml \
---checkpoint ./check_point_eo/molnet_rs.pt \
---result_path ./results_eo/molnet_rs.csv \
---device 1 
 ```
 
 

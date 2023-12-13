@@ -96,8 +96,6 @@ def eval(model, device, loader, batch_size, num_points):
 	y_true = []
 	y_pred = []
 	smiles_list = []
-	cos1_list = []
-	cos2_list = []
 	for _, batch in enumerate(tqdm(loader, desc="Iteration")):
 		smiles_iso, smiles, pos, neg, anchor, y = batch
 		pos = pos.to(device).to(torch.float32)
@@ -121,13 +119,8 @@ def eval(model, device, loader, batch_size, num_points):
 		y_pred.append(pred.detach().cpu())
 		smiles_list.extend(smiles_iso)
 
-		COS = nn.CosineSimilarity(dim=1, eps=1e-6)
-		cos1_list.append(torch.mean(COS(emb_anchor, emb_neg)).item())
-		cos2_list.append(torch.mean(COS(emb_anchor, emb_pos)).item())
-
 	y_true = torch.cat(y_true, dim=0) 
 	y_pred = torch.cat(y_pred, dim=0)
-	print('cos1 (anchor-neg): {}, cos2 (anchor-pos): {}'.format(np.mean(np.array(cos1_list)), np.mean(np.array(cos2_list))))
 	return smiles_list, y_true, y_pred
 
 
@@ -261,7 +254,13 @@ if __name__ == "__main__":
 			best_valid_auc = valid_auc
 			if args.checkpoint != '':
 				print('Saving checkpoint...')
-				checkpoint = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(), 'best_val_auc': best_valid_auc, 'num_params': num_params}
+				checkpoint = {'epoch': epoch, 
+								'model_state_dict': model.state_dict(), 
+								'optimizer_state_dict': optimizer.state_dict(), 
+								'scheduler_state_dict': scheduler.state_dict(), 
+								'best_val_auc': best_valid_auc, 
+								'best_val_acc': best_valid_acc, 
+								'num_params': num_params}
 				torch.save(checkpoint, args.checkpoint)
 			early_stop_patience = 0
 			print('Early stop patience reset')
@@ -288,12 +287,12 @@ if __name__ == "__main__":
 		print("Inference on test set:")
 		smiles_list_test, y_true_test, y_pred_test = eval(model, device, valid_loader, 1, 
 														config['model_para']['num_atoms'])
-		if config['model_para']['out_channels'] == 1:
+		if config['model_para']['out_channels'] == 1: 
 			y_pred_test_binary = torch.where(y_pred_test > 0.5, 1., 0.)
-			test_res = {'SMILES': smiles_list, 'True': y_true, 
+			test_res = {'SMILES': smiles_list_test, 'True': y_true_test, 
 						'Pred Final': y_pred_test_binary.squeeze().tolist(), 
 						'Pred': y_pred_test.squeeze().tolist()}
-		else:
+		else: 
 			y_pred_test_binary = torch.argmax(y_pred_test, dim=1)
 			y_pred_out = []
 			for y in y_pred_test:
@@ -301,31 +300,34 @@ if __name__ == "__main__":
 			test_res = {'SMILES': smiles_list_test, 'True': y_true_test, 
 						'Pred Final': y_pred_test_binary.squeeze().tolist(), 
 						'Pred': y_pred_out}
+		valid_auc = roc_auc_score(y_true_test, y_pred_test, multi_class='ovr',)
+		valid_acc = accuracy_score(y_true_test, y_pred_test_binary)
+		print('Final: AUC: {:.4f}, ACC: {:.4f}'.format(valid_auc, valid_acc))
 		df_test = pd.DataFrame.from_dict(test_res)
 		df_test.to_csv(args.result_path)
 		print('Save the results to {}'.format(args.result_path))
 
-		print("Inference on training set:")
-		train_loader = DataLoader(train_set,
-								batch_size=1,
-								num_workers=config['train_para']['num_workers'],
-								drop_last=True)
-		smiles_list_train, y_true_train, y_pred_train = eval(model, device, train_loader, 1, 
-															config['model_para']['num_atoms'])
-		if config['model_para']['out_channels'] == 1: 
-			y_pred_train_binary = torch.where(y_pred_train > 0.5, 1., 0.)
-			train_res = {'SMILES': smiles_list_train, 'True': y_true_train, 
-						'Pred Final': y_pred_train_binary.squeeze().tolist(), 
-						'Pred': y_pred_train.squeeze().tolist()}
-		else:
-			y_pred_train_binary = torch.argmax(y_pred_train, dim=1)
-			y_pred_out = []
-			for y in y_pred_train:
-				y_pred_out.append(','.join([str(i) for i in y.tolist()]))
-			train_res = {'SMILES': smiles_list_train, 'True': y_true_train, 
-						'Pred Final': y_pred_train_binary.squeeze().tolist(), 
-						'Pred': y_pred_out}
-		df_train = pd.DataFrame.from_dict(train_res)
-		df_train.to_csv(args.result_path.replace('.csv', '_train.csv'))
-		print('Save the results to {}'.format(args.result_path.replace('.csv', '_train.csv')))
+		# print("Inference on training set:")
+		# train_loader = DataLoader(train_set,
+		# 						batch_size=1,
+		# 						num_workers=config['train_para']['num_workers'],
+		# 						drop_last=True)
+		# smiles_list_train, y_true_train, y_pred_train = eval(model, device, train_loader, 1, 
+		# 													config['model_para']['num_atoms'])
+		# if config['model_para']['out_channels'] == 1: 
+		# 	y_pred_train_binary = torch.where(y_pred_train > 0.5, 1., 0.)
+		# 	train_res = {'SMILES': smiles_list_train, 'True': y_true_train, 
+		# 				'Pred Final': y_pred_train_binary.squeeze().tolist(), 
+		# 				'Pred': y_pred_train.squeeze().tolist()}
+		# else:
+		# 	y_pred_train_binary = torch.argmax(y_pred_train, dim=1)
+		# 	y_pred_out = []
+		# 	for y in y_pred_train:
+		# 		y_pred_out.append(','.join([str(i) for i in y.tolist()]))
+		# 	train_res = {'SMILES': smiles_list_train, 'True': y_true_train, 
+		# 				'Pred Final': y_pred_train_binary.squeeze().tolist(), 
+		# 				'Pred': y_pred_out}
+		# df_train = pd.DataFrame.from_dict(train_res)
+		# df_train.to_csv(args.result_path.replace('.csv', '_train.csv'))
+		# print('Save the results to {}'.format(args.result_path.replace('.csv', '_train.csv')))
 	

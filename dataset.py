@@ -194,8 +194,9 @@ class ChiralityDataset(BaseDataset):
 
 	def __getitem__(self, idx): 
 		mol = self.supp[idx]
-		mol_id = mol.GetProp('id')
-		smiles = Chem.MolToSmiles(mol, isomericSmiles=True)
+		# mol_id = mol.GetProp('id')
+		mol_id = Chem.MolToSmiles(mol, isomericSmiles=True)
+		smiles = Chem.MolToSmiles(mol, isomericSmiles=False)
 		X = self.create_X(mol, self.num_points)
 		chir = float(mol.GetProp('k2/k1'))
 		Y = self.convert2cls(chir, mol.GetProp('csp_category'))
@@ -254,10 +255,12 @@ class ChiralityDataset_infer(BaseDataset):
 
 	def __getitem__(self, idx): 
 		mol = self.supp[idx]
-		smiles = Chem.MolToSmiles(mol)
+		# mol_id = mol.GetProp('id')
+		mol_id = Chem.MolToSmiles(mol, isomericSmiles=True)
+		smiles = Chem.MolToSmiles(mol, isomericSmiles=False)
 		X = self.create_X(mol, self.num_points)
 		mb = int(self.csp_no)
-		return smiles, mb, X
+		return mol_id, smiles, mb, X
 
 
 
@@ -307,28 +310,3 @@ class ChiralityDataset_EO(BaseDataset):
 		else:
 			raise Exception("The category for CSP should be 1 or 2, rather than {}".format(csp_category))
 		return y
-
-# s/r configutation prediction
-class ChiralityDataset_SR(BaseDataset): 
-	def __init__(self, root_path, num_points=200): 
-		super(ChiralityDataset_SR, self).__init__()
-		with open(root_path, 'rb') as file: 
-			self.data = pickle.load(file)
-				
-	def __len__(self):
-		return len(self.data)
-
-	def __getitem__(self, idx): 
-		return self.data[idx]['smiles_iso'], self.data[idx]['smiles'], self.data[idx]['pos'], self.data[idx]['neg'], self.data[idx]['anchor'], self.data[idx]['chiral_tag']
-
-class ChiralityDataset_ChlRo_SR(BaseDataset): 
-	def __init__(self, root_path, num_points=200): 
-		super(ChiralityDataset_ChlRo_SR, self).__init__()
-		with open(root_path, 'rb') as file: 
-			self.data = pickle.load(file)
-				
-	def __len__(self):
-		return len(self.data)
-
-	def __getitem__(self, idx): 
-		return self.data[idx]['id'], self.data[idx]['mol'], self.data[idx]['chiral_tag']

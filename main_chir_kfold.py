@@ -38,18 +38,17 @@ def train(model, device, loader, optimizer, batch_size, num_points):
 	y_true = []
 	y_pred = []
 	for step, batch in enumerate(tqdm(loader, desc="Iteration")): 
-		_, _, _, x, mask, y = batch
+		_, _, _, x, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
-		mask = mask.to(device).to(torch.float32)
 		y = y.to(device)
 		idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1) * num_points
 
 		model.train()
-		pred = model(x, None, idx_base)
+		pred = model(x, idx_base)
 		# print('pred', pred.size())
 
-		loss = CE_loss(pred, y.float())
+		loss = CE_loss(pred, y)
 		loss.backward()
 
 		optimizer.step()
@@ -70,16 +69,15 @@ def eval(model, device, loader, batch_size, num_points):
 	id_list = []
 	mbs = []
 	for _, batch in enumerate(tqdm(loader, desc="Iteration")): 
-		mol_id, smiles_iso, mb, x, mask, y = batch
+		mol_id, smiles_iso, mb, x, y = batch
 		x = x.to(device).to(torch.float32)
 		x = x.permute(0, 2, 1)
-		mask = mask.to(device).to(torch.float32)
 		y = y.to(device)
 
 		idx_base = torch.arange(0, TEST_BATCH_SIZE, device=device).view(-1, 1, 1) * num_points
 
 		with torch.no_grad(): 
-			pred = model(x, None, idx_base)
+			pred = model(x, idx_base)
 
 		y_true.append(y.detach().cpu())
 		y_pred.append(pred.detach().cpu())
@@ -189,7 +187,7 @@ if __name__ == "__main__":
 	split_indices = []
 	for i in range(args.k_fold): 
 		split_indices.append(indices[i*each_chunk: (i+1)*each_chunk])
-
+	
 	records = {'best_acc': [], 'best_auc': []}
 	for fold_i in range(args.k_fold): 
 		print('\n# --------------- Fold-{} --------------- #'.format(fold_i)) 
@@ -251,7 +249,7 @@ if __name__ == "__main__":
 		if args.log_dir != '':
 			writer = SummaryWriter(log_dir=args.log_dir)
 
-		early_stop_step = 20
+		early_stop_step = 5
 		early_stop_patience = 0
 		for epoch in range(1, config['train_para']['epochs'] + 1): 
 			print("\n=====Epoch {}".format(epoch))
@@ -288,7 +286,11 @@ if __name__ == "__main__":
 				best_valid_auc = valid_auc
 				if args.checkpoint != '':
 					print('Saving checkpoint...')
-					checkpoint = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(), 'scheduler_state_dict': scheduler.state_dict(), 'best_val_auc': best_valid_auc, 'num_params': num_params}
+					checkpoint = {'epoch': epoch, 'model_state_dict': model.state_dict(), 
+									'optimizer_state_dict': optimizer.state_dict(), 
+									'scheduler_state_dict': scheduler.state_dict(), 
+									'best_val_auc': best_valid_auc, 
+									'num_params': num_params}
 					torch.save(checkpoint, check_point_fold)
 				early_stop_patience = 0
 				print('Early stop patience reset')
@@ -317,12 +319,11 @@ if __name__ == "__main__":
 			optimizer.load_state_dict(torch.load(check_point_fold, map_location=device)['optimizer_state_dict'])
 			scheduler.load_state_dict(torch.load(check_point_fold, map_location=device)['scheduler_state_dict'])
 			best_valid_auc = torch.load(check_point_fold, map_location=device)['best_val_auc']
-
+			
 			print('Evaluating...')
 			id_list, smiles_list, mbs, y_true, y_pred = eval(model, device, valid_loader, 
 															config['train_para']['batch_size'], 
-															config['model_para']['num_atoms'], 
-															config['model_para']['out_channels'])
+															config['model_para']['num_atoms'])
 			y_pred_out = []
 			for y in y_pred:
 				y_pred_out.append(','.join([str(i) for i in y.tolist()]))
@@ -330,13 +331,13 @@ if __name__ == "__main__":
 			res_df = pd.DataFrame({'ID': id_list, 'SMILES': smiles_list, 'MB': mbs, 'Class': y_true, 'Pred': y_pred_out})
 			print('Average the results of enantiomers...')
 			res_df = average_results_on_enantiomers(res_df)
+			print(res_df.head(), res_df.columns)
 			res_df.to_csv(result_path_fold, sep='\t')
 			print('Save the test results to {}'.format(result_path_fold))
+
+		del model # remove the model from GPU
 
 	print('\n# --------------- Final Results --------------- #')
 	for i, (acc, auc) in enumerate(zip(records['best_acc'], records['best_auc'])):
 		print('fold_{}: acc: {}, auc: {}'.format(i, acc, auc))
 	print('mean acc: {}, mean auc: {}'.format(sum(records['best_acc'])/len(records['best_acc']), sum(records['best_auc'])/len(records['best_auc'])))
-	print('(Note that these are not the final results because they are not averaged on enantiomers. \
-Please calculate the metrics again by average the results of enantiomers, which can be found in `./vis/`. )')
-

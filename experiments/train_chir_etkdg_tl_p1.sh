@@ -12,45 +12,45 @@ do
     if [[ "$VARIABLE" =~ ^(4|16|7|10)$ ]]; then
         echo "python main_chir.py --config ./configs/molnet_train_l.yaml --csp_no $VARIABLE \
                                     --log_dir ./logs/molnet_chirality/ \
-                                    --resume_path ./check_point/molnet_agilent.pt \
+                                    --resume_path ./check_point/molnetv2_qtof_etkdgv3.pt \
                                     --transfer \
-                                    --checkpoint ./check_point0828/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
-                                    --device 0"
+                                    --checkpoint ./check_point1203/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                    --device 1"
 
         python main_chir.py --config ./configs/molnet_train_l.yaml --csp_no $VARIABLE \
                                     --log_dir ./logs/molnet_chirality/ \
-                                    --resume_path ./check_point/molnet_agilent.pt \
+                                    --resume_path ./check_point/molnetv2_qtof_etkdgv3.pt \
                                     --transfer \
-                                    --checkpoint ./check_point0828/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
-                                    --device 0
+                                    --checkpoint ./check_point1203/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                    --device 1
     elif [[ "$VARIABLE" =~ ^(8|11|6|9)$ ]]; then
         echo "python main_chir.py --config ./configs/molnet_train_xl.yaml --csp_no $VARIABLE \
                                     --log_dir ./logs/molnet_chirality/ \
-                                    --resume_path ./check_point/molnet_agilent.pt \
+                                    --resume_path ./check_point/molnetv2_qtof_etkdgv3.pt \
                                     --transfer \
-                                    --checkpoint ./check_point0828/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
-                                    --device 0"
+                                    --checkpoint ./check_point1203/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                    --device 1"
 
         python main_chir.py --config ./configs/molnet_train_xl.yaml --csp_no $VARIABLE \
                                     --log_dir ./logs/molnet_chirality/ \
-                                    --resume_path ./check_point/molnet_agilent.pt \
+                                    --resume_path ./check_point/molnetv2_qtof_etkdgv3.pt \
                                     --transfer \
-                                    --checkpoint ./check_point0828/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
-                                    --device 0
+                                    --checkpoint ./check_point1203/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                    --device 1
     else
         echo "python main_chir.py --config ./configs/molnet_train_s.yaml --csp_no $VARIABLE \
                                     --log_dir ./logs/molnet_chirality/ \
-                                    --resume_path ./check_point/molnet_agilent.pt \
+                                    --resume_path ./check_point/molnetv2_qtof_etkdgv3.pt \
                                     --transfer \
-                                    --checkpoint ./check_point0828/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
-                                    --device 0"
+                                    --checkpoint ./check_point1203/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                    --device 1"
 
         python main_chir.py --config ./configs/molnet_train_s.yaml --csp_no $VARIABLE \
                                     --log_dir ./logs/molnet_chirality/ \
-                                    --resume_path ./check_point/molnet_agilent.pt \
+                                    --resume_path ./check_point/molnetv2_qtof_etkdgv3.pt \
                                     --transfer \
-                                    --checkpoint ./check_point0828/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
-                                    --device 0
+                                    --checkpoint ./check_point1203/molnet_chirality_cls_etkdg_csp$VARIABLE-tl.pt \
+                                    --device 1
     fi
     echo "Done!"
 done

@@ -107,6 +107,8 @@ if __name__ == '__main__':
 						help='path to output data')
 	parser.add_argument('--test_ratio', type=float, default = 0.1,
 						help='test ratio')
+	parser.add_argument('--atom_num', type=int, default = 100,
+						help='test ratio')
 	args = parser.parse_args()
 
 	# -------------------------------------
@@ -120,14 +122,15 @@ if __name__ == '__main__':
 	for mol in supp: 
 		if mol is None:
 			continue
+		mol = Chem.AddHs(mol)
 
 		mol_block = Chem.MolToMolBlock(mol).split("\n")
 		mol_block_length = sum([1 for d in mol_block if len(d)==69 and len(d.split())==16])
 		if mol_block_length < mol.GetNumAtoms(): 
 			print(mol_block_length, '<', mol.GetNumAtoms())
 			continue
-		if mol.GetNumAtoms() >= 100: # --num_atoms 100
-			print('Too many atoms')
+		if mol.GetNumAtoms() >= args.atom_num: 
+			print('Too many atoms: {}'.format(mol.GetNumAtoms()))
 			continue
 
 		flag_remove = False
@@ -205,8 +208,8 @@ if __name__ == '__main__':
 	df['Conf_Number'] = df['Mol'].apply(lambda x: int(x.GetNumConformers()))
 	df = df[df['Conf_Number'] >= 1]
 	# align enantiomers
-	print('Align enantiomers...')
-	df = df.groupby(['SMILES'], as_index=False).progress_apply(align_conf)
+	# print('Align enantiomers...')
+	# df = df.groupby(['SMILES'], as_index=False).progress_apply(align_conf)
 	# remove nan
 	df = df.dropna()
 	df.reset_index(inplace=True, drop=True)
@@ -227,7 +230,7 @@ if __name__ == '__main__':
 	# save to pkl
 	data_pkl = []
 	for mol in df['Mol'].tolist(): 
-		x = create_X(mol, num_points=100)
+		x = create_X(mol, num_points=args.atom_num)
 		data_pkl.append({'anchor': x})
 	for idx, row in df.iterrows():
 		data_pkl[idx]['smiles_iso'] = row['SMILES_iso']

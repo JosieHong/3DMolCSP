@@ -20,7 +20,8 @@ model_para:
   out_channels: 4
 
 train_para:
-  batch_size: 256
+  # batch_size: 256
+  batch_size: 128
   epochs: 100
   lr: 0.00001
   num_workers: 0
