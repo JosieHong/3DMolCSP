@@ -1,6 +1,10 @@
 # 3DMolCSP
 
+[![CC BY-NC-SA 4.0][cc-by-nc-sa-shield]][cc-by-nc-sa] (free for academic use) 
 
+Enhanced Structure-Based Prediction of Chiral Stationary Phases for Chromatographic Enantioseparation from 3D Molecular Conformations
+
+*paper on Analytical Chemistry is coming...*
 
 ## Set up
 
@@ -47,7 +51,8 @@ python ./preprocess/preprocess_chirbase.py \
 python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type etkdg
 
 # (optional) OMEGA conformations are available
-python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type omega
+# OMEGA algorithm requires a license. Please get the license here: https://www.eyesopen.com/omega
+python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type omega --license <path to OMEGA license>
 
 # (optional) randomly split training and validation set for Exp3
 python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean_etkdg.sdf --output_train ./data/ChirBase/chirbase_clean_etkdg_train.sdf --output_test ./data/ChirBase/chirbase_clean_etkdg_test.sdf
@@ -150,3 +155,14 @@ nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out
 nohup bash ./experiments/train_chir_etkdg_eo.sh > train_chir_etkdg_eo.out 
 ```
 
+<!-- ## Citation
+
+If you feel this work useful, please cite: 
+
+```
+``` -->
+
+---
+
+This work is licensed under a
+[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License][cc-by-nc-sa].
