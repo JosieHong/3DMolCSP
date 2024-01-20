@@ -168,4 +168,5 @@ data/compare_chirbase_cmrt.csv
 notebooks/
 *.bak
 vis/
-demo/
+experiments/*p1.sh
+experiments/*p2.sh

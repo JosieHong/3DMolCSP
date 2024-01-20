@@ -96,9 +96,6 @@ class MolConv(nn.Module):
 		self.dist_ff = nn.Sequential(nn.Conv2d(1, 1, kernel_size=1, bias=False),
 								nn.BatchNorm2d(1),
 								nn.Sigmoid())
-		# self.gm2m_ff = nn.Sequential(nn.Conv2d(k, 1, kernel_size=1, bias=False),
-		# 						nn.BatchNorm2d(1),
-		# 						nn.Sigmoid())
 
 		if remove_xyz: 
 			self.center_ff = nn.Sequential(nn.Conv2d(in_dim-3, in_dim+k-3, kernel_size=1, bias=False),

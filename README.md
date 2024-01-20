@@ -122,13 +122,9 @@ mean acc: 0.82, mean auc: 0.97
 ```bash
 # training from scratch
 nohup bash ./experiments/train_chir_etkdg_5fold.sh > molnet_chir_etkdg_5fold.out 
-nohup bash ./experiments/train_chir_etkdg_5fold_p1.sh > molnet_chir_etkdg_5fold_p1.out 
-nohup bash ./experiments/train_chir_etkdg_5fold_p2.sh > molnet_chir_etkdg_5fold_p2.out 
 
 # traning from pre-trained model
 nohup bash ./experiments/train_chir_etkdg_5fold_tl.sh > molnet_chir_etkdg_5fold_tl.out 
-nohup bash ./experiments/train_chir_etkdg_5fold_tl_p1.sh > molnet_chir_etkdg_5fold_tl_p1.out 
-nohup bash ./experiments/train_chir_etkdg_5fold_tl_p2.sh > molnet_chir_etkdg_5fold_tl_p2.out 
 ```
 
 ### Exp3: Training on ChirBase and testing on CMRT
@@ -138,8 +134,6 @@ nohup bash ./experiments/train_chir_etkdg_5fold_tl_p2.sh > molnet_chir_etkdg_5fo
 ```bash
 # traning from pre-trained model
 nohup bash ./experiments/train_chir_etkdg_tl.sh > molnet_chir_etkdg_tl.out 
-nohup bash ./experiments/train_chir_etkdg_tl_p1.sh > molnet_chir_etkdg_tl_p1.out 
-nohup bash ./experiments/train_chir_etkdg_tl_p2.sh > molnet_chir_etkdg_tl_p2.out 
 ```
 
 2. Preprocess CMRT
@@ -155,22 +149,4 @@ nohup bash ./experiments/infer_cmrt_etkdg_tl.sh > molnet_cmrt_etkdg_tl_infer.out
 ```bash
 nohup bash ./experiments/train_chir_etkdg_eo.sh > train_chir_etkdg_eo.out 
 ```
-
-
-
-<!-- ## Jupyter Notebook
-
-```bash
-conda activate molnet
-conda install -c anaconda ipykernel
-python -m ipykernel install --user --name=molnet
-conda install -c conda-forge notebook
-
-jupyter notebook --no-browser --port=8889
-# on my own PC
-ssh -N -f -L localhost:8888:localhost:8889 yuhhong@boltzmann.luddy.indiana.edu
-ssh -N -f -L localhost:8888:localhost:8889 yuhhong@ampere.luddy.indiana.edu
-# visit: 
-# http://localhost:8888/
-``` -->
 
