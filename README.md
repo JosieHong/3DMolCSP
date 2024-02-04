@@ -4,7 +4,9 @@
 
 Enhanced Structure-Based Prediction of Chiral Stationary Phases for Chromatographic Enantioseparation from 3D Molecular Conformations
 
-*paper on Analytical Chemistry is coming...*
+Yuhui Hong, Christopher J. Welch, Patrick Piras, and Haixu Tang*
+
+This work introduces 3D molecular representation learning to enhance the prediction of enantioselectivity of Chiral Stationary Phases (CSPs) and elution order of enantiomers in the field of chromatography, which can assist in the selection of CSPs for practical applications. Our [[paper]](https://pubs.acs.org/doi/full/10.1021/acs.analchem.3c04028) published on Analytical Chemistry provides further details. 
 
 ## Set up
 
@@ -33,9 +35,6 @@ pip install lxml tqdm pandas pyteomics PyYAML scikit-learn
 # The demo dataset is already cleaned. 
 # generate 3D conformations
 python ./preprocess/gen_conformers.py --path ./data/demo/chirobiotic_v.sdf --conf_type etkdg
-
-# (optional)
-python ./preprocess/random_split_sdf.py --input ./data/demo/chirobiotic_v_etkdg.sdf --output_train ./data/demo/chirobiotic_v_etkdg_train.sdf --output_test ./data/demo/chirobiotic_v_etkdg_test.sdf
 ```
 
 ### ChirBase
@@ -52,11 +51,17 @@ python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf 
 
 # (optional) OMEGA conformations are available
 # OMEGA algorithm requires a license. Please get the license here: https://www.eyesopen.com/omega
-python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type omega --license <path to OMEGA license>
+# python ./preprocess/gen_conformers.py --path ./data/ChirBase/chirbase_clean.sdf --conf_type omega --license <path to OMEGA license>
 
 # (optional) randomly split training and validation set for Exp3
-python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean_etkdg.sdf --output_train ./data/ChirBase/chirbase_clean_etkdg_train.sdf --output_test ./data/ChirBase/chirbase_clean_etkdg_test.sdf
-python ./preprocess/random_split_sdf.py --input ./data/ChirBase/chirbase_clean_omega.sdf --output_train ./data/ChirBase/chirbase_clean_omega_train.sdf --output_test ./data/ChirBase/chirbase_clean_omega_test.sdf
+python ./preprocess/random_split_sdf.py \
+--input ./data/ChirBase/chirbase_clean_etkdg.sdf \
+--output_train ./data/ChirBase/chirbase_clean_etkdg_train.sdf \
+--output_test ./data/ChirBase/chirbase_clean_etkdg_test.sdf
+# python ./preprocess/random_split_sdf.py \
+# --input ./data/ChirBase/chirbase_clean_omega.sdf \
+# --output_train ./data/ChirBase/chirbase_clean_omega_train.sdf \
+# --output_test ./data/ChirBase/chirbase_clean_omega_test.sdf
 ```
 
 ### CMRT
@@ -76,7 +81,7 @@ python ./preprocess/gen_conformers.py --path ./data/CMRT/cmrt_clean.sdf --conf_t
 
 ### Exp1: Demo
 
-1. Preprocess demo dataset
+1. [Preprocess demo dataset](#demo-set-chirobiotic-v)
 
 2. Five-fold cross-validation
 
@@ -120,7 +125,7 @@ mean acc: 0.82, mean auc: 0.97
 
 ### Exp2: Five-fold cross-validation on ChirBase
 
-1. Preprocess ChirBase
+1. [Preprocess ChirBase](#chirbase)
 
 2. Five-fold cross-validation
 
@@ -141,7 +146,7 @@ nohup bash ./experiments/train_chir_etkdg_5fold_tl.sh > molnet_chir_etkdg_5fold_
 nohup bash ./experiments/train_chir_etkdg_tl.sh > molnet_chir_etkdg_tl.out 
 ```
 
-2. Preprocess CMRT
+2. [Preprocess CMRT](#cmrt)
 
 3. infer on CMRT
 
